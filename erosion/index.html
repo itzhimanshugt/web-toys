@@ -1,0 +1,904 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>Rain Carver</title>
+<meta name="description" content="Rain carves river valleys into a procedurally generated mountain block, one simulated droplet at a time, in live 3D.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Atkinson+Hyperlegible:wght@400;700&family=Bricolage+Grotesque:opsz,wght@12..96,600;12..96,800&family=JetBrains+Mono:wght@400;500&display=swap">
+<style>
+/* layout: title strip; hero 3D block diagram with instrument HUD (left); control column grouped Rain / Droplet physics / View / Key (right, stacks below at 860px); field notes underneath */
+:root{
+  --paper:#e3e9e7;      /* survey sheet: cool green-grey */
+  --panel:#edf1ef;
+  --ink:#15232a;        /* map ink */
+  --slate:#4d5f67;      /* secondary text */
+  --rule:#c1cbc8;
+  --glacier:#1f6688;    /* accent: water */
+  --lichen:#62742a;     /* secondary accent: vegetation */
+  --sky-1:#d5e0e4; --sky-2:#9fb4bf;
+  --hud-bg:rgba(237,241,239,.84); --hud-ink:#15232a;
+  --on-accent:#f3f7f8;
+  color-scheme:light;
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    --paper:#11181b; --panel:#172126; --ink:#dce6e5; --slate:#8fa1a6; --rule:#2a383e;
+    --glacier:#6fb6d6; --lichen:#a7b968; --sky-1:#22323a; --sky-2:#0c1316;
+    --hud-bg:rgba(17,24,27,.78); --hud-ink:#dce6e5; --on-accent:#0c1418;
+    color-scheme:dark;
+  }
+}
+:root[data-theme="dark"]{
+  --paper:#11181b; --panel:#172126; --ink:#dce6e5; --slate:#8fa1a6; --rule:#2a383e;
+  --glacier:#6fb6d6; --lichen:#a7b968; --sky-1:#22323a; --sky-2:#0c1316;
+  --hud-bg:rgba(17,24,27,.78); --hud-ink:#dce6e5; --on-accent:#0c1418;
+  color-scheme:dark;
+}
+*{box-sizing:border-box}
+body{margin:0;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px);background:var(--paper);color:var(--ink);font-family:"Atkinson Hyperlegible",system-ui,-apple-system,"Segoe UI",sans-serif;font-size:14px;line-height:1.45}
+.wrap{max-width:1480px;margin:0 auto;padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));padding-block:14px 32px}
+.mono,.num{font-family:"JetBrains Mono",ui-monospace,Consolas,monospace;font-variant-numeric:tabular-nums}
+.top{display:flex;flex-wrap:wrap;align-items:baseline;justify-content:space-between;gap:6px 24px;padding-bottom:12px;border-bottom:1px solid var(--rule)}
+.top>*{min-width:0}
+h1{font-family:"Bricolage Grotesque","Trebuchet MS",system-ui,sans-serif;font-weight:800;font-size:clamp(30px,4.2vw,46px);letter-spacing:-.025em;line-height:.95;margin:0;text-wrap:balance}
+h1 span{color:var(--glacier)}
+.lede{margin:0;color:var(--slate);max-width:56ch;text-wrap:pretty}
+.layout{display:grid;grid-template-columns:minmax(0,1fr) 300px;gap:18px;margin-top:16px;align-items:start}
+.layout>*{min-width:0}
+.stage{position:relative;height:clamp(440px,calc(100svh - 150px),780px);border-radius:4px;overflow:hidden;background:radial-gradient(120% 90% at 50% 18%,var(--sky-1),var(--sky-2));border:1px solid var(--rule)}
+#gl,#flat{position:absolute;inset:0;width:100%;height:100%;display:block;touch-action:none;cursor:grab;outline:none}
+#gl:active{cursor:grabbing}
+#flat{object-fit:contain;image-rendering:auto}
+.stage:has(#gl:focus-visible){outline:2px solid var(--glacier);outline-offset:2px}
+.hud{position:absolute;background:var(--hud-bg);color:var(--hud-ink);border-radius:3px;backdrop-filter:blur(6px);-webkit-backdrop-filter:blur(6px);pointer-events:none}
+.hud-tl{top:12px;left:12px;padding:10px 12px 10px;min-width:0;max-width:calc(100% - 24px)}
+.k{font-size:10.5px;letter-spacing:.12em;text-transform:uppercase;color:var(--slate);font-weight:700}
+.k em{font-style:normal;color:var(--glacier)}
+.big{font-family:"JetBrains Mono",ui-monospace,Consolas,monospace;font-variant-numeric:tabular-nums;font-size:26px;font-weight:500;line-height:1.1;margin:2px 0 8px;letter-spacing:-.01em}
+.stats{display:grid;grid-template-columns:auto auto;gap:3px 16px;margin:0}
+.stats div{display:contents}
+.stats dt{font-size:11.5px;color:var(--slate)}
+.stats dd{margin:0;font-family:"JetBrains Mono",ui-monospace,Consolas,monospace;font-variant-numeric:tabular-nums;font-size:12px;text-align:right}
+.hud-br{right:12px;bottom:12px;padding:5px 9px;font-size:11.5px}
+.hint{position:absolute;left:12px;bottom:12px;margin:0;font-size:11.5px;color:var(--hud-ink);opacity:.75;pointer-events:none}
+.tag{position:absolute;left:0;top:0;padding:3px 8px;border-radius:2px;font-size:11px;font-weight:700;letter-spacing:.14em;text-transform:uppercase;pointer-events:none;white-space:nowrap;will-change:transform}
+#lblBefore{background:#f2e3b3;color:#2a2210}
+#lblAfter{background:var(--glacier);color:var(--on-accent)}
+.glmsg{position:absolute;left:12px;right:12px;top:auto;bottom:44px;margin:0;padding:8px 10px;background:var(--hud-bg);border-radius:3px;font-size:12.5px}
+/* controls */
+.controls{display:flex;flex-direction:column;gap:14px}
+.grp{border-top:1px solid var(--rule);padding-top:10px;display:flex;flex-direction:column;gap:10px}
+.grp:first-child{border-top:0;padding-top:0}
+.grp h2{margin:0;font-size:11px;letter-spacing:.14em;text-transform:uppercase;color:var(--slate);font-weight:700}
+.row{display:flex;gap:8px;flex-wrap:wrap}
+.btn{font:inherit;font-weight:700;font-size:13px;padding:8px 12px;border-radius:3px;border:1px solid var(--rule);background:var(--panel);color:var(--ink);cursor:pointer;min-height:36px;display:inline-flex;align-items:center;gap:8px}
+.btn:hover{border-color:var(--slate)}
+.btn.primary{background:var(--glacier);border-color:var(--glacier);color:var(--on-accent);flex:1 1 auto}
+.btn.primary:hover{filter:brightness(1.08)}
+.btn[aria-pressed]{flex:1 1 130px;justify-content:space-between}
+.btn[aria-pressed] .led{width:9px;height:9px;border-radius:50%;border:1.5px solid var(--slate);flex:none}
+.btn[aria-pressed="true"] .led{background:var(--lichen);border-color:var(--lichen)}
+.btn kbd{font-family:"JetBrains Mono",ui-monospace,Consolas,monospace;font-size:10.5px;font-weight:400;opacity:.7;border:1px solid currentColor;border-radius:2px;padding:0 4px}
+.btn:disabled{opacity:.6;cursor:progress}
+:focus-visible{outline:2px solid var(--glacier);outline-offset:2px}
+.seedline{display:flex;justify-content:space-between;font-size:12px;color:var(--slate)}
+.ctl{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:2px 8px;align-items:baseline}
+.ctl label{font-weight:700;font-size:13px}
+.ctl output{font-family:"JetBrains Mono",ui-monospace,Consolas,monospace;font-variant-numeric:tabular-nums;font-size:12px;color:var(--glacier)}
+.ctl small{grid-column:1 / -1;color:var(--slate);font-size:11.5px;line-height:1.35}
+.ctl input{grid-column:1 / -1}
+input[type=range]{-webkit-appearance:none;appearance:none;width:100%;height:24px;background:transparent;margin:0;cursor:pointer;touch-action:pan-y}
+input[type=range]::-webkit-slider-runnable-track{height:3px;background:var(--rule);border-radius:2px}
+input[type=range]::-moz-range-track{height:3px;background:var(--rule);border-radius:2px}
+input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:16px;height:16px;border-radius:50%;background:var(--panel);border:2px solid var(--glacier);margin-top:-6.5px}
+input[type=range]::-moz-range-thumb{width:12px;height:12px;border-radius:50%;background:var(--panel);border:2px solid var(--glacier)}
+.linkbtn{font:inherit;font-size:12px;background:none;border:0;padding:2px 0;color:var(--glacier);text-decoration:underline;text-underline-offset:3px;cursor:pointer;align-self:flex-start}
+.key{display:grid;grid-template-columns:1fr 1fr;gap:6px 12px;margin:0;padding:0;list-style:none;font-size:12.5px}
+.key li{display:flex;align-items:center;gap:7px;min-width:0}
+.sw{width:14px;height:14px;border-radius:2px;flex:none;box-shadow:inset 0 0 0 1px rgba(0,0,0,.18)}
+/* notes */
+.notes{margin-top:26px;display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:22px;border-top:1px solid var(--rule);padding-top:16px}
+.notes>*{min-width:0}
+.notes h3{font-family:"Bricolage Grotesque","Trebuchet MS",system-ui,sans-serif;font-weight:600;font-size:18px;margin:0 0 6px;letter-spacing:-.01em;text-wrap:balance}
+.notes p{margin:0 0 8px;color:var(--slate);text-wrap:pretty}
+.notes p b{color:var(--ink)}
+.keys{margin:0;padding:0;list-style:none;display:grid;grid-template-columns:auto 1fr;gap:4px 10px;font-size:13px;color:var(--slate)}
+.keys kbd{font-family:"JetBrains Mono",ui-monospace,Consolas,monospace;font-size:11.5px;color:var(--ink);border:1px solid var(--rule);border-bottom-width:2px;border-radius:3px;padding:0 5px;justify-self:start}
+@media (max-width:860px){
+  .layout{grid-template-columns:minmax(0,1fr)}
+  .stage{height:clamp(340px,62svh,560px)}
+  .controls{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:16px 20px}
+  .grp:first-child{border-top:1px solid var(--rule);padding-top:10px}
+  .notes{grid-template-columns:minmax(0,1fr)}
+}
+@media (max-width:600px){
+  .controls{grid-template-columns:minmax(0,1fr)}
+  .grp:first-child{border-top:0;padding-top:0}
+  .big{font-size:21px;margin-bottom:5px}
+  .hud-tl{padding:8px 10px}
+  .stats{gap:1px 12px}
+  .hint{display:none}
+  .hud-br{font-size:10.5px}
+}
+@media (prefers-reduced-motion: reduce){*{scroll-behavior:auto}}
+</style>
+</head>
+<body>
+
+<div class="wrap">
+  <header class="top">
+    <h1>Rain <span>Carver</span></h1>
+    <p class="lede">Rain falls one droplet at a time on a 12.8 km block of new mountains. Each droplet scours, carries and drops sediment, and valleys emerge from the sum.</p>
+  </header>
+
+  <div class="layout">
+    <div class="stage" id="stage">
+      <canvas id="gl" tabindex="0" role="img" aria-label="3D block diagram of eroding terrain. Drag to orbit, scroll to zoom, arrow keys orbit when focused."></canvas>
+      <canvas id="flat" hidden aria-label="Shaded relief map of the eroding terrain"></canvas>
+      <div class="hud hud-tl" aria-live="off">
+        <div class="k">Model time <em>scaled</em></div>
+        <div class="big" id="tYears">0 yr</div>
+        <dl class="stats">
+          <div><dt>Droplets</dt><dd id="tDrops">0</dd></div>
+          <div><dt>Rain now</dt><dd id="tRate">0/s</dd></div>
+          <div><dt>Rock removed</dt><dd id="tEroded">0 km³</dd></div>
+          <div><dt>Deepest cut</dt><dd id="tCut">0 m</dd></div>
+        </dl>
+      </div>
+      <div class="hud hud-br" id="scaleNote">12.8 × 12.8 km · 50 m cells · 2× vertical</div>
+      <p class="hint">Drag to orbit · scroll or pinch to zoom</p>
+      <span class="tag" id="lblBefore" hidden>Before</span>
+      <span class="tag" id="lblAfter" hidden>Now</span>
+      <p class="glmsg" id="glmsg" hidden></p>
+    </div>
+
+    <aside class="controls" aria-label="Simulation controls">
+      <section class="grp">
+        <h2>Rain</h2>
+        <div class="row">
+          <button id="run" class="btn primary" type="button">Pause rain <kbd>Space</kbd></button>
+          <button id="newSeed" class="btn" type="button">New terrain <kbd>N</kbd></button>
+        </div>
+        <div class="seedline"><span>Seed <span class="mono" id="seedVal">0</span></span><span id="busy" aria-live="polite"></span></div>
+        <div class="ctl">
+          <label for="rate">Rain rate</label><output id="rateOut" for="rate">30k/s</output>
+          <input id="rate" type="range" min="2000" max="80000" step="1000" value="30000">
+          <small>Droplets released per second. 1 droplet counts as 1 model year.</small>
+        </div>
+      </section>
+
+      <section class="grp">
+        <h2>Droplet physics</h2>
+        <div class="ctl">
+          <label for="erode">Erosion strength</label><output id="erodeOut" for="erode">0.30</output>
+          <input id="erode" type="range" min="0.05" max="0.9" step="0.01" value="0.3">
+          <small>Share of spare carrying capacity a droplet fills by scouring each step.</small>
+        </div>
+        <div class="ctl">
+          <label for="deposit">Deposition</label><output id="depositOut" for="deposit">0.30</output>
+          <input id="deposit" type="range" min="0.02" max="0.9" step="0.01" value="0.3">
+          <small>Share of excess sediment dropped when a droplet slows or overloads.</small>
+        </div>
+        <div class="ctl">
+          <label for="evap">Evaporation</label><output id="evapOut" for="evap">2.0%</output>
+          <input id="evap" type="range" min="0.002" max="0.08" step="0.001" value="0.02">
+          <small>Water lost per step. Drier droplets carry less and dump their load sooner.</small>
+        </div>
+        <div class="ctl">
+          <label for="inertia">Inertia</label><output id="inertiaOut" for="inertia">0.05</output>
+          <input id="inertia" type="range" min="0" max="0.5" step="0.01" value="0.05">
+          <small>How much a droplet keeps its heading instead of turning straight downhill.</small>
+        </div>
+        <button id="defaults" class="linkbtn" type="button">Restore default physics</button>
+      </section>
+
+      <section class="grp">
+        <h2>View</h2>
+        <div class="row">
+          <button id="flowBtn" class="btn" type="button" aria-pressed="true"><span>Droplet paths <kbd>F</kbd></span><span class="led" aria-hidden="true"></span></button>
+          <button id="splitBtn" class="btn" type="button" aria-pressed="false"><span>Before / now <kbd>B</kbd></span><span class="led" aria-hidden="true"></span></button>
+        </div>
+        <button id="resetCam" class="linkbtn" type="button">Reset camera (R)</button>
+      </section>
+
+      <section class="grp">
+        <h2>Surface key</h2>
+        <ul class="key">
+          <li><span class="sw" style="background:#eef1f3"></span>Snow</li>
+          <li><span class="sw" style="background:#5e5752"></span>Bare rock</li>
+          <li><span class="sw" style="background:#8d8476"></span>Scree</li>
+          <li><span class="sw" style="background:#5f7337"></span>Grass</li>
+          <li><span class="sw" style="background:#b19a6a"></span>New sediment</li>
+          <li><span class="sw" style="background:#2f6f9c"></span>Droplet paths</li>
+        </ul>
+      </section>
+    </aside>
+  </div>
+
+  <section class="notes">
+    <div>
+      <h3>What each droplet does</h3>
+      <p>A droplet starts on a random cell and rolls downhill, blending its old heading with the local slope by the inertia setting. Its sediment capacity is <b>drop in height × speed × water × 4</b>, with a small floor so it can still work on gentle ground.</p>
+      <p>Below capacity it scours a 3-cell-radius brush around itself. Above capacity, or when it climbs into a pit, it deposits. It loses water every step and stops after 30 steps.</p>
+    </div>
+    <div>
+      <h3>Where the method comes from</h3>
+      <p>The terrain is fractal Brownian motion (summed octaves of gradient noise) plus ridged noise, which folds each octave at zero to form sharp crests. The droplet scheme follows Hans Theobald Beyer's 2015 TU Munich thesis on hydraulic erosion.</p>
+      <p>Model time is a display scale only. Real rivers work far more slowly: the Colorado River cut the Grand Canyon, about 1.8 km deep, over roughly the last 5 to 6 million years.</p>
+    </div>
+    <div>
+      <h3>Keys</h3>
+      <ul class="keys">
+        <li style="display:contents"><kbd>Space</kbd><span>Start or pause rain</span></li>
+        <li style="display:contents"><kbd>N</kbd><span>New terrain from a fresh seed</span></li>
+        <li style="display:contents"><kbd>F</kbd><span>Show droplet paths</span></li>
+        <li style="display:contents"><kbd>B</kbd><span>Split view: uneroded west half</span></li>
+        <li style="display:contents"><kbd>R</kbd><span>Reset camera</span></li>
+        <li style="display:contents"><kbd>← → ↑ ↓</kbd><span>Orbit (view focused)</span></li>
+        <li style="display:contents"><kbd>+ −</kbd><span>Zoom (view focused)</span></li>
+      </ul>
+    </div>
+  </section>
+</div>
+
+<script>
+(() => {
+'use strict';
+const $ = id => document.getElementById(id);
+const SMALL = matchMedia('(max-width: 600px)').matches;
+const REDUCED = matchMedia('(prefers-reduced-motion: reduce)').matches;
+const canvas = $('gl');
+
+/* ---------- WebGL context ---------- */
+let gl = null, uintOK = false;
+try {
+  gl = canvas.getContext('webgl2', { antialias: true, alpha: true });
+  if (gl) uintOK = true;
+  else {
+    gl = canvas.getContext('webgl', { antialias: true, alpha: true });
+    if (gl) uintOK = !!gl.getExtension('OES_element_index_uint');
+  }
+} catch (e) { gl = null; }
+
+/* ---------- world constants ---------- */
+const N = (SMALL || (gl && !uintOK)) ? 128 : 256;
+const TILE_M = 12800, CELL_M = TILE_M / N, RELIEF_M = 1800, VEX = 2;
+const HS = (RELIEF_M / TILE_M) * 2 * VEX;     // world units per unit height (tile is 2 units wide)
+const BASE = 0.14;                            // block diagram depth below sea level
+const RADIUS = SMALL ? 2 : 3;
+const LIFE = 30, CAP = 4, MINCAP = 0.01, GRAV = 4;
+const PRE = SMALL ? 60000 : 200000;
+const DEF = { rate: SMALL ? 12000 : 30000, erode: 0.3, deposit: 0.3, evap: 0.02, inertia: 0.05 };
+const P = Object.assign({}, DEF);
+let flowOn = true, splitOn = false, running = !REDUCED;
+$('scaleNote').textContent = '12.8 × 12.8 km · ' + CELL_M + ' m cells · ' + VEX + '× vertical';
+
+const NN = N * N;
+const H = new Float32Array(NN), H0 = new Float32Array(NN), FLOW = new Float32Array(NN);
+
+/* ---------- seeded PRNG + gradient noise ---------- */
+let rs = 1;
+function rnd() {
+  rs = (rs + 0x6D2B79F5) | 0;
+  let t = Math.imul(rs ^ (rs >>> 15), 1 | rs);
+  t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+  return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+}
+const perm = new Uint8Array(512);
+const GX = new Float32Array([1, -1, 1, -1, 1.41, -1.41, 0, 0]);
+const GY = new Float32Array([1, 1, -1, -1, 0, 0, 1.41, -1.41]);
+function seedPerm() {
+  const p = new Uint8Array(256);
+  for (let i = 0; i < 256; i++) p[i] = i;
+  for (let i = 255; i > 0; i--) { const j = (rnd() * (i + 1)) | 0; const t = p[i]; p[i] = p[j]; p[j] = t; }
+  for (let i = 0; i < 512; i++) perm[i] = p[i & 255];
+}
+function perlin(x, y) {
+  let X = Math.floor(x), Y = Math.floor(y);
+  x -= X; y -= Y; X &= 255; Y &= 255;
+  const u = x * x * x * (x * (x * 6 - 15) + 10), v = y * y * y * (y * (y * 6 - 15) + 10);
+  const a = perm[X] + Y, b = perm[X + 1] + Y;
+  const g00 = perm[a] & 7, g10 = perm[b] & 7, g01 = perm[a + 1] & 7, g11 = perm[b + 1] & 7;
+  const n00 = GX[g00] * x + GY[g00] * y, n10 = GX[g10] * (x - 1) + GY[g10] * y;
+  const n01 = GX[g01] * x + GY[g01] * (y - 1), n11 = GX[g11] * (x - 1) + GY[g11] * (y - 1);
+  const nx0 = n00 + u * (n10 - n00), nx1 = n01 + u * (n11 - n01);
+  return nx0 + v * (nx1 - nx0);
+}
+function fbm(x, y, oct) {
+  let a = 0.5, f = 1, s = 0;
+  for (let i = 0; i < oct; i++) { s += a * perlin(x * f, y * f); f *= 2.03; a *= 0.5; }
+  return s;
+}
+function ridged(x, y, oct) {
+  let a = 0.5, f = 1, s = 0, w = 1;
+  for (let i = 0; i < oct; i++) {
+    let r = 1 - Math.abs(perlin(x * f, y * f));
+    r *= r; r *= w; w = Math.min(1, r * 1.7);
+    s += r * a; f *= 2.01; a *= 0.5;
+  }
+  return s;
+}
+const sstep = (a, b, x) => { const t = Math.min(1, Math.max(0, (x - a) / (b - a))); return t * t * (3 - 2 * t); };
+
+function generate(seed) {
+  rs = seed; seedPerm();
+  let lo = Infinity, hi = -Infinity;
+  for (let j = 0; j < N; j++) for (let i = 0; i < N; i++) {
+    const x = i / (N - 1), y = j / (N - 1);
+    const qx = fbm(x * 1.6 + 3.1, y * 1.6 + 7.7, 3), qy = fbm(x * 1.6 + 11.3, y * 1.6 + 2.9, 3);
+    const wx = x + 0.25 * qx, wy = y + 0.25 * qy;
+    const base = fbm(wx * 2.3, wy * 2.3, 6);
+    const mask = sstep(-0.18, 0.32, fbm(x * 1.25 + 21.7, y * 1.25 + 4.1, 3));
+    const rid = ridged(wx * 2.6 + 40.3, wy * 2.6 + 17.9, 6);
+    const cx = x - 0.5, cy = y - 0.5;
+    const dome = 1 - Math.min(1, Math.sqrt(cx * cx + cy * cy) * 1.5);
+    const h = base * 0.55 + rid * (0.3 + 0.75 * mask) + dome * 0.32;
+    H[j * N + i] = h; if (h < lo) lo = h; if (h > hi) hi = h;
+  }
+  const inv = 1 / (hi - lo);
+  // clamp: H is float32 but lo is float64, so the lowest cell can round below lo and pow() would return NaN
+  for (let k = 0; k < NN; k++) H[k] = 0.015 + 0.97 * Math.pow(Math.max(0, (H[k] - lo) * inv), 1.3);
+  H0.set(H);
+  FLOW.fill(0);
+}
+
+/* ---------- erosion brush ---------- */
+const bx = [], by = [], bw = [];
+{
+  let s = 0;
+  for (let y = -RADIUS; y <= RADIUS; y++) for (let x = -RADIUS; x <= RADIUS; x++) {
+    const d = Math.sqrt(x * x + y * y);
+    if (d < RADIUS) { bx.push(x); by.push(y); bw.push(RADIUS - d); s += RADIUS - d; }
+  }
+  for (let i = 0; i < bw.length; i++) bw[i] /= s;
+}
+const BX = Int32Array.from(bx), BY = Int32Array.from(by), BW = Float32Array.from(bw), BN = BW.length;
+
+/* ---------- droplet erosion (Beyer-style particles) ---------- */
+let trackFlow = true;
+function erodeDrops(count, deadline) {
+  const n = N, lim = N - 1;
+  const inertia = P.inertia, ero = P.erode, dep = P.deposit, keep = 1 - P.evap;
+  for (let d = 0; d < count; d++) {
+    if ((d & 31) === 0 && performance.now() > deadline) return d;
+    let px = rnd() * (lim - 1), py = rnd() * (lim - 1);
+    let dx = 0, dy = 0, speed = 1, water = 1, sed = 0;
+    for (let s = 0; s < LIFE; s++) {
+      const ix = px | 0, iy = py | 0, idx = iy * n + ix;
+      const u = px - ix, v = py - iy;
+      const hNW = H[idx], hNE = H[idx + 1], hSW = H[idx + n], hSE = H[idx + n + 1];
+      const gx = (hNE - hNW) * (1 - v) + (hSE - hSW) * v;
+      const gy = (hSW - hNW) * (1 - u) + (hSE - hNE) * u;
+      const h = hNW * (1 - u) * (1 - v) + hNE * u * (1 - v) + hSW * (1 - u) * v + hSE * u * v;
+      dx = dx * inertia - gx * (1 - inertia);
+      dy = dy * inertia - gy * (1 - inertia);
+      const len = Math.sqrt(dx * dx + dy * dy);
+      if (len < 1e-12) break;
+      dx /= len; dy /= len;
+      px += dx; py += dy;
+      if (trackFlow) FLOW[idx] += water;
+      if (px < 0 || py < 0 || px >= lim || py >= lim) break;
+      const jx = px | 0, jy = py | 0, j0 = jy * n + jx, a = px - jx, b = py - jy;
+      const nh = H[j0] * (1 - a) * (1 - b) + H[j0 + 1] * a * (1 - b) + H[j0 + n] * (1 - a) * b + H[j0 + n + 1] * a * b;
+      const dh = nh - h;
+      const cap = Math.max(-dh * speed * water * CAP, MINCAP);
+      if (sed > cap || dh > 0) {
+        const amt = dh > 0 ? Math.min(dh, sed) : (sed - cap) * dep;
+        sed -= amt;
+        H[idx] += amt * (1 - u) * (1 - v); H[idx + 1] += amt * u * (1 - v);
+        H[idx + n] += amt * (1 - u) * v; H[idx + n + 1] += amt * u * v;
+      } else {
+        const amt = Math.min((cap - sed) * ero, -dh);
+        const cx = (px - dx + 0.5) | 0, cy = (py - dy + 0.5) | 0;
+        for (let k = 0; k < BN; k++) {
+          const qx = cx + BX[k], qy = cy + BY[k];
+          if (qx < 0 || qy < 0 || qx > lim || qy > lim) continue;
+          const q = qy * n + qx, w = amt * BW[k], hq = H[q];
+          const take = hq < w ? hq : w;
+          H[q] = hq - take; sed += take;
+        }
+      }
+      const v2 = speed * speed - dh * GRAV;
+      speed = v2 > 0 ? Math.sqrt(v2) : 0;
+      water *= keep;
+    }
+  }
+  return count;
+}
+
+/* ---------- normals ---------- */
+const GSCALE = HS * (N - 1) / 4;   // world dh/dx from central difference of normalized heights
+function writeNormals(src, dst, stride, off) {
+  const n = N, lim = N - 1;
+  for (let j = 0; j < n; j++) {
+    const jm = (j > 0 ? j - 1 : 0) * n, jp = (j < lim ? j + 1 : lim) * n, jr = j * n;
+    for (let i = 0; i < n; i++) {
+      const im = i > 0 ? i - 1 : 0, ip = i < lim ? i + 1 : lim;
+      const gx = (src[jr + ip] - src[jr + im]) * GSCALE;
+      const gz = (src[jp + i] - src[jm + i]) * GSCALE;
+      const il = 1 / Math.sqrt(gx * gx + 1 + gz * gz);
+      const o = (jr + i) * stride + off;
+      dst[o] = src[jr + i]; dst[o + 1] = -gx * il; dst[o + 2] = -gz * il;
+    }
+  }
+}
+
+/* ---------- maths ---------- */
+const proj = new Float32Array(16), view = new Float32Array(16), mvp = new Float32Array(16);
+function perspective(o, fy, asp, near, far) {
+  const f = 1 / Math.tan(fy / 2), nf = 1 / (near - far);
+  o.fill(0); o[0] = f / asp; o[5] = f; o[10] = (far + near) * nf; o[11] = -1; o[14] = 2 * far * near * nf;
+}
+function lookAt(o, ex, ey, ez, cx, cy, cz) {
+  let zx = ex - cx, zy = ey - cy, zz = ez - cz, l = 1 / Math.hypot(zx, zy, zz); zx *= l; zy *= l; zz *= l;
+  let xx = zz, xy = 0, xz = -zx; l = Math.hypot(xx, xy, xz) || 1; xx /= l; xy /= l; xz /= l;   // up = (0,1,0)
+  const yx = zy * xz - zz * xy, yy = zz * xx - zx * xz, yz = zx * xy - zy * xx;
+  o[0] = xx; o[1] = yx; o[2] = zx; o[3] = 0; o[4] = xy; o[5] = yy; o[6] = zy; o[7] = 0;
+  o[8] = xz; o[9] = yz; o[10] = zz; o[11] = 0;
+  o[12] = -(xx * ex + xy * ey + xz * ez); o[13] = -(yx * ex + yy * ey + yz * ez); o[14] = -(zx * ex + zy * ey + zz * ez); o[15] = 1;
+}
+function mul(o, a, b) {
+  for (let c = 0; c < 4; c++) for (let r = 0; r < 4; r++)
+    o[c * 4 + r] = a[r] * b[c * 4] + a[4 + r] * b[c * 4 + 1] + a[8 + r] * b[c * 4 + 2] + a[12 + r] * b[c * 4 + 3];
+}
+
+/* ---------- camera ---------- */
+const CAM0 = { yaw: 0.72, pitch: 0.6, dist: 3.0 };
+const cam = { yaw: CAM0.yaw, pitch: CAM0.pitch, dist: CAM0.dist };
+let intro = REDUCED ? 1 : 0;   // one orchestrated move: the camera settles down onto the block
+function clampCam() { cam.pitch = Math.min(1.45, Math.max(0.1, cam.pitch)); cam.dist = Math.min(7, Math.max(1.3, cam.dist)); }
+
+/* ---------- GL setup ---------- */
+let progT, progS, uT = {}, uS = {}, bufStat, bufDyn, bufIdx, bufSkirt, bufSkirtIdx, idxCount, skirtIdxCount, idxType;
+const dyn = new Float32Array(NN * 4), stat = new Float32Array(NN * 5);
+const SK = 4 * N * 2, skirt = new Float32Array(SK * 6);
+
+const VS_T = `
+attribute vec2 aXZ; attribute vec3 aStat; attribute vec4 aDyn;
+uniform mat4 uMVP; uniform float uHS; uniform float uSplit;
+varying vec3 vN; varying float vH; varying float vDep; varying float vFlow; varying float vX;
+void main(){
+  float before = step(aXZ.x, uSplit);
+  float h = mix(aDyn.x, aStat.x, before);
+  vec2 nn = mix(aDyn.yz, aStat.yz, before);
+  vN = vec3(nn.x, sqrt(max(0.0, 1.0 - dot(nn, nn))), nn.y);
+  vH = h; vDep = (aDyn.x - aStat.x) * (1.0 - before); vFlow = aDyn.w * (1.0 - before); vX = aXZ.x;
+  gl_Position = uMVP * vec4(aXZ.x, h * uHS, aXZ.y, 1.0);
+}`;
+const FS_T = `
+#ifdef GL_FRAGMENT_PRECISION_HIGH
+precision highp float;
+#else
+precision mediump float;
+#endif
+uniform vec3 uSun; uniform float uSplit;
+varying vec3 vN; varying float vH; varying float vDep; varying float vFlow; varying float vX;
+vec3 lit(vec3 c, vec3 n){
+  float d = max(dot(n, uSun), 0.0);
+  float sky = 0.5 + 0.5 * n.y;
+  return c * (vec3(1.0, 0.95, 0.86) * d * 1.08 + vec3(0.40, 0.48, 0.60) * sky * 0.55 + 0.05);
+}
+void main(){
+  vec3 n = normalize(vN);
+  float slope = 1.0 - n.y;
+  vec3 grassLo = vec3(0.30, 0.40, 0.19), grassHi = vec3(0.44, 0.47, 0.27);
+  vec3 scree = vec3(0.55, 0.51, 0.45), rock = vec3(0.37, 0.34, 0.32), snow = vec3(0.94, 0.96, 0.98);
+  vec3 alluv = vec3(0.70, 0.61, 0.43);
+  vec3 c = mix(grassLo, grassHi, smoothstep(0.2, 0.6, vH));
+  c = mix(c, scree, smoothstep(0.10, 0.22, slope) * 0.9 + smoothstep(0.62, 0.75, vH) * 0.3);
+  c = mix(c, rock, smoothstep(0.24, 0.42, slope));
+  float snowAmt = smoothstep(0.70, 0.76, vH + n.x * 0.03) * (1.0 - smoothstep(0.30, 0.48, slope));
+  c = mix(c, snow, snowAmt);
+  c = mix(c, alluv, smoothstep(0.0008, 0.008, vDep) * (1.0 - smoothstep(0.25, 0.45, slope)) * (1.0 - snowAmt * 0.6));
+  float f = 1.0 - exp(-vFlow);
+  vec3 water = mix(vec3(0.36, 0.62, 0.78), vec3(0.11, 0.33, 0.56), smoothstep(0.3, 1.0, f));
+  c = mix(c, water, smoothstep(0.06, 0.55, f) * 0.92);
+  vec3 col = lit(c, n);
+  col += vec3(0.05, 0.10, 0.14) * smoothstep(0.5, 1.0, f) * max(dot(reflect(-uSun, n), vec3(0.0, 1.0, 0.0)), 0.0);
+  float line = 1.0 - smoothstep(0.002, 0.005, abs(vX - uSplit));
+  col = mix(col, vec3(1.0, 0.86, 0.38), line);
+  gl_FragColor = vec4(col, 1.0);
+}`;
+const VS_S = `
+attribute vec3 aPos; attribute vec3 aNT;
+uniform mat4 uMVP;
+varying float vY; varying float vTop; varying vec3 vN;
+void main(){
+  vY = aPos.y; vTop = aNT.z; vN = vec3(aNT.x, 0.0, aNT.y);
+  gl_Position = uMVP * vec4(aPos, 1.0);
+}`;
+const FS_S = `
+#ifdef GL_FRAGMENT_PRECISION_HIGH
+precision highp float;
+#else
+precision mediump float;
+#endif
+uniform vec3 uSun;
+varying float vY; varying float vTop; varying vec3 vN;
+void main(){
+  float y = vY;
+  vec3 a = vec3(0.56, 0.48, 0.39), b = vec3(0.43, 0.37, 0.32), c3 = vec3(0.66, 0.59, 0.47), sh = vec3(0.33, 0.30, 0.29);
+  float k1 = step(0.5, fract(y * 21.0));
+  float k2 = step(0.72, fract(y * 6.7 + 0.2));
+  float k3 = step(0.86, fract(y * 3.1 + 0.55));
+  vec3 c = mix(mix(a, b, k1 * 0.7), c3, k2 * 0.7);
+  c = mix(c, sh, k3 * 0.8);
+  c *= 0.9 + 0.1 * fract(sin(floor(y * 140.0) * 91.7) * 4375.5);
+  c = mix(c, vec3(0.24, 0.20, 0.15), 1.0 - smoothstep(0.0, 0.014, vTop - y));
+  float d = max(dot(vN, uSun), 0.0);
+  vec3 col = c * (vec3(1.0, 0.95, 0.86) * d * 0.9 + vec3(0.40, 0.48, 0.60) * 0.42 + 0.08);
+  col *= 0.75 + 0.25 * smoothstep(-0.14, 0.0, y);
+  gl_FragColor = vec4(col, 1.0);
+}`;
+
+function compile(vs, fs, binds) {
+  const mk = (type, src) => { const s = gl.createShader(type); gl.shaderSource(s, src); gl.compileShader(s);
+    if (!gl.getShaderParameter(s, gl.COMPILE_STATUS)) throw new Error(gl.getShaderInfoLog(s)); return s; };
+  const p = gl.createProgram();
+  gl.attachShader(p, mk(gl.VERTEX_SHADER, vs)); gl.attachShader(p, mk(gl.FRAGMENT_SHADER, fs));
+  binds.forEach((nm, i) => gl.bindAttribLocation(p, i, nm));
+  gl.linkProgram(p);
+  if (!gl.getProgramParameter(p, gl.LINK_STATUS)) throw new Error(gl.getProgramInfoLog(p));
+  return p;
+}
+
+function initGL() {
+  progT = compile(VS_T, FS_T, ['aXZ', 'aStat', 'aDyn']);
+  progS = compile(VS_S, FS_S, ['aPos', 'aNT']);
+  ['uMVP', 'uHS', 'uSplit', 'uSun'].forEach(k => uT[k] = gl.getUniformLocation(progT, k));
+  ['uMVP', 'uSun'].forEach(k => uS[k] = gl.getUniformLocation(progS, k));
+  bufStat = gl.createBuffer(); bufDyn = gl.createBuffer(); bufIdx = gl.createBuffer();
+  bufSkirt = gl.createBuffer(); bufSkirtIdx = gl.createBuffer();
+  const quads = (N - 1) * (N - 1);
+  const idx = N * N > 65535 ? new Uint32Array(quads * 6) : new Uint16Array(quads * 6);
+  idxType = N * N > 65535 ? gl.UNSIGNED_INT : gl.UNSIGNED_SHORT;
+  let o = 0;
+  for (let j = 0; j < N - 1; j++) for (let i = 0; i < N - 1; i++) {
+    const a = j * N + i, b = a + 1, c = a + N, d = c + 1;
+    idx[o++] = a; idx[o++] = c; idx[o++] = b; idx[o++] = b; idx[o++] = c; idx[o++] = d;
+  }
+  idxCount = o;
+  gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, bufIdx); gl.bufferData(gl.ELEMENT_ARRAY_BUFFER, idx, gl.STATIC_DRAW);
+  gl.bindBuffer(gl.ARRAY_BUFFER, bufDyn); gl.bufferData(gl.ARRAY_BUFFER, dyn.byteLength, gl.DYNAMIC_DRAW);
+  gl.bindBuffer(gl.ARRAY_BUFFER, bufStat); gl.bufferData(gl.ARRAY_BUFFER, stat.byteLength, gl.STATIC_DRAW);
+  const sidx = new Uint16Array(4 * (N - 1) * 6); o = 0;
+  for (let e = 0; e < 4; e++) for (let i = 0; i < N - 1; i++) {
+    const a = (e * N + i) * 2;
+    sidx[o++] = a; sidx[o++] = a + 1; sidx[o++] = a + 2; sidx[o++] = a + 2; sidx[o++] = a + 1; sidx[o++] = a + 3;
+  }
+  skirtIdxCount = o;
+  gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, bufSkirtIdx); gl.bufferData(gl.ELEMENT_ARRAY_BUFFER, sidx, gl.STATIC_DRAW);
+  gl.bindBuffer(gl.ARRAY_BUFFER, bufSkirt); gl.bufferData(gl.ARRAY_BUFFER, skirt.byteLength, gl.DYNAMIC_DRAW);
+  gl.enable(gl.DEPTH_TEST);
+  gl.disable(gl.CULL_FACE);
+}
+
+function uploadStatic() {
+  writeNormals(H0, stat, 5, 2);
+  for (let j = 0; j < N; j++) for (let i = 0; i < N; i++) {
+    const o = (j * N + i) * 5;
+    stat[o] = -1 + 2 * i / (N - 1); stat[o + 1] = -1 + 2 * j / (N - 1);
+  }
+  if (gl) { gl.bindBuffer(gl.ARRAY_BUFFER, bufStat); gl.bufferSubData(gl.ARRAY_BUFFER, 0, stat); }
+}
+
+/* flow decay + normals + skirt, then upload */
+let flowK = 1;
+function updateDynamic(decay) {
+  let sum = 0;
+  if (decay < 1) { for (let k = 0; k < NN; k++) { const f = FLOW[k] * decay; FLOW[k] = f; sum += f; } }
+  else for (let k = 0; k < NN; k++) sum += FLOW[k];
+  const mean = sum / NN;
+  flowK = mean > 0 ? 1 / (mean * 8) : 0;
+  writeNormals(H, dyn, 4, 0);
+  const fk = flowOn ? flowK : 0;
+  for (let k = 0, o = 3; k < NN; k++, o += 4) dyn[o] = FLOW[k] * fk;
+  buildSkirt();
+  if (gl) {
+    gl.bindBuffer(gl.ARRAY_BUFFER, bufDyn); gl.bufferSubData(gl.ARRAY_BUFFER, 0, dyn);
+    gl.bindBuffer(gl.ARRAY_BUFFER, bufSkirt); gl.bufferSubData(gl.ARRAY_BUFFER, 0, skirt);
+  }
+}
+function buildSkirt() {
+  const split = splitOn ? 0 : -9;
+  let o = 0;
+  for (let e = 0; e < 4; e++) {
+    for (let i = 0; i < N; i++) {
+      let gi, gj, nx, nz;
+      if (e === 0) { gi = i; gj = 0; nx = 0; nz = -1; }
+      else if (e === 1) { gi = i; gj = N - 1; nx = 0; nz = 1; }
+      else if (e === 2) { gi = 0; gj = i; nx = -1; nz = 0; }
+      else { gi = N - 1; gj = i; nx = 1; nz = 0; }
+      const x = -1 + 2 * gi / (N - 1), z = -1 + 2 * gj / (N - 1);
+      const k = gj * N + gi;
+      const top = (x <= split ? H0[k] : H[k]) * HS;
+      skirt[o++] = x; skirt[o++] = top; skirt[o++] = z; skirt[o++] = nx; skirt[o++] = nz; skirt[o++] = top;
+      skirt[o++] = x; skirt[o++] = -BASE; skirt[o++] = z; skirt[o++] = nx; skirt[o++] = nz; skirt[o++] = top;
+    }
+  }
+}
+
+/* ---------- sizing ---------- */
+let W = 1, Hh = 1, dpr = 1;
+function resize() {
+  const r = canvas.getBoundingClientRect();
+  dpr = Math.min(window.devicePixelRatio || 1, SMALL ? 1.75 : 2);
+  W = Math.max(1, Math.round(r.width * dpr)); Hh = Math.max(1, Math.round(r.height * dpr));
+  if (canvas.width !== W || canvas.height !== Hh) { canvas.width = W; canvas.height = Hh; }
+  needsDraw = true;
+}
+
+/* ---------- render ---------- */
+const sun = (() => { const v = [-0.55, 0.62, -0.42]; const l = Math.hypot(v[0], v[1], v[2]); return new Float32Array([v[0] / l, v[1] / l, v[2] / l]); })();
+const lblB = $('lblBefore'), lblA = $('lblAfter');
+function project(x, y, z, out) {
+  const cx = mvp[0] * x + mvp[4] * y + mvp[8] * z + mvp[12];
+  const cy = mvp[1] * x + mvp[5] * y + mvp[9] * z + mvp[13];
+  const cw = mvp[3] * x + mvp[7] * y + mvp[11] * z + mvp[15];
+  out[0] = (cx / cw * 0.5 + 0.5) * W / dpr; out[1] = (0.5 - cy / cw * 0.5) * Hh / dpr; out[2] = cw;
+}
+const tmp = new Float32Array(3);
+function render() {
+  const asp = W / Hh;
+  const fov = 0.70;
+  const fy = asp < 1 ? 2 * Math.atan(Math.tan(fov / 2) / asp) : fov;
+  perspective(proj, fy, asp, 0.05, 30);
+  const e = intro < 1 ? 1 - Math.pow(1 - intro, 3) : 1;
+  const pitch = cam.pitch + (1 - e) * 0.55, dist = cam.dist + (1 - e) * 1.4, yaw = cam.yaw - (1 - e) * 0.7;
+  const ty = 0.12;
+  const ex = Math.cos(pitch) * Math.sin(yaw) * dist, ey = ty + Math.sin(pitch) * dist, ez = Math.cos(pitch) * Math.cos(yaw) * dist;
+  lookAt(view, ex, ey, ez, 0, ty - 0.08, 0);
+  mul(mvp, proj, view);
+
+  gl.viewport(0, 0, W, Hh);
+  gl.clearColor(0, 0, 0, 0);
+  gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
+
+  gl.useProgram(progT);
+  gl.uniformMatrix4fv(uT.uMVP, false, mvp);
+  gl.uniform1f(uT.uHS, HS);
+  gl.uniform1f(uT.uSplit, splitOn ? 0 : -9);
+  gl.uniform3fv(uT.uSun, sun);
+  gl.bindBuffer(gl.ARRAY_BUFFER, bufStat);
+  gl.enableVertexAttribArray(0); gl.vertexAttribPointer(0, 2, gl.FLOAT, false, 20, 0);
+  gl.enableVertexAttribArray(1); gl.vertexAttribPointer(1, 3, gl.FLOAT, false, 20, 8);
+  gl.bindBuffer(gl.ARRAY_BUFFER, bufDyn);
+  gl.enableVertexAttribArray(2); gl.vertexAttribPointer(2, 4, gl.FLOAT, false, 16, 0);
+  gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, bufIdx);
+  gl.drawElements(gl.TRIANGLES, idxCount, idxType, 0);
+
+  gl.useProgram(progS);
+  gl.uniformMatrix4fv(uS.uMVP, false, mvp);
+  gl.uniform3fv(uS.uSun, sun);
+  gl.disableVertexAttribArray(2);
+  gl.bindBuffer(gl.ARRAY_BUFFER, bufSkirt);
+  gl.vertexAttribPointer(0, 3, gl.FLOAT, false, 24, 0);
+  gl.vertexAttribPointer(1, 3, gl.FLOAT, false, 24, 12);
+  gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, bufSkirtIdx);
+  gl.drawElements(gl.TRIANGLES, skirtIdxCount, gl.UNSIGNED_SHORT, 0);
+
+  if (splitOn) {
+    project(-0.5, 0.85 * HS, 0, tmp); placeTag(lblB, tmp);
+    project(0.5, 0.85 * HS, 0, tmp); placeTag(lblA, tmp);
+  }
+}
+function placeTag(el, p) {
+  el.hidden = p[2] <= 0;
+  el.style.transform = 'translate(' + (p[0] - el.offsetWidth / 2).toFixed(1) + 'px,' + (p[1] - el.offsetHeight / 2).toFixed(1) + 'px)';
+}
+
+/* ---------- 2D fallback (no WebGL) ---------- */
+let flat = null, flatCtx = null, flatImg = null;
+function initFlat(reason) {
+  gl = null;
+  canvas.hidden = true;
+  flat = $('flat'); flat.hidden = false; flat.width = N; flat.height = N;
+  flatCtx = flat.getContext('2d'); flatImg = flatCtx.createImageData(N, N);
+  const m = $('glmsg'); m.hidden = false;
+  m.textContent = '3D view unavailable (' + reason + '). Showing a shaded relief map; the simulation and controls still work.';
+}
+function renderFlat() {
+  const d = flatImg.data, lim = N - 1;
+  for (let j = 0; j < N; j++) for (let i = 0; i < N; i++) {
+    const k = j * N + i, before = splitOn && i < N / 2;
+    const src = before ? H0 : H;
+    const gx = (src[j * N + Math.min(lim, i + 1)] - src[j * N + Math.max(0, i - 1)]) * GSCALE;
+    const gz = (src[Math.min(lim, j + 1) * N + i] - src[Math.max(0, j - 1) * N + i]) * GSCALE;
+    const il = 1 / Math.sqrt(gx * gx + 1 + gz * gz);
+    const sh = Math.max(0, (-gx * sun[0] + sun[1] - gz * sun[2]) * il) * 0.85 + 0.25;
+    const h = src[k], slope = 1 - il;
+    let r = 78, g = 100, b = 50;
+    if (slope > 0.12) { r = 140; g = 131; b = 116; }
+    if (slope > 0.3) { r = 95; g = 87; b = 82; }
+    if (h > 0.72 && slope < 0.4) { r = 238; g = 242; b = 246; }
+    const f = before || !flowOn ? 0 : 1 - Math.exp(-FLOW[k] * flowK);
+    const wv = Math.min(1, Math.max(0, (f - 0.06) / 0.5)) * 0.9;
+    r = r + (47 - r) * wv; g = g + (111 - g) * wv; b = b + (156 - b) * wv;
+    const o = k * 4;
+    d[o] = Math.min(255, r * sh); d[o + 1] = Math.min(255, g * sh); d[o + 2] = Math.min(255, b * sh); d[o + 3] = 255;
+  }
+  flatCtx.putImageData(flatImg, 0, 0);
+}
+
+/* ---------- readouts ---------- */
+let totalDrops = 0, rateEMA = 0;
+const fmtInt = n => Math.round(n).toLocaleString('en-US');
+function fmtYears(y) {
+  if (y >= 1e6) return (y / 1e6).toFixed(2) + ' Myr';
+  if (y >= 1e3) return (y / 1e3).toFixed(1) + ' kyr';
+  return Math.round(y) + ' yr';
+}
+const elY = $('tYears'), elD = $('tDrops'), elR = $('tRate'), elE = $('tEroded'), elC = $('tCut');
+function readouts(full) {
+  elY.textContent = fmtYears(totalDrops);
+  elD.textContent = fmtInt(totalDrops);
+  elR.textContent = running ? (rateEMA >= 1000 ? (rateEMA / 1000).toFixed(1) + 'k/s' : Math.round(rateEMA) + '/s') : 'paused';
+  if (full) {
+    let er = 0, cut = 0;
+    for (let k = 0; k < NN; k++) { const d = H0[k] - H[k]; if (d > 0) { er += d; if (d > cut) cut = d; } }
+    elE.textContent = (er * RELIEF_M * CELL_M * CELL_M / 1e9).toFixed(2) + ' km³';
+    elC.textContent = Math.round(cut * RELIEF_M) + ' m';
+  }
+}
+
+/* ---------- world lifecycle ---------- */
+let seed = 0;
+function newWorld(s) {
+  seed = s >>> 0;
+  $('seedVal').textContent = String(seed).padStart(10, '0').replace(/(\d{5})(\d{5})/, '$1 $2');
+  generate(seed);
+  rs = seed ^ 0x9E3779B9;
+  trackFlow = false;
+  erodeDrops(PRE - 30000, Infinity);
+  trackFlow = true;
+  erodeDrops(30000, Infinity);
+  totalDrops = PRE;
+  uploadStatic();
+  updateDynamic(1);
+  readouts(true);
+  needsDraw = true;
+}
+
+/* ---------- loop ---------- */
+let last = 0, want = 0, needsDraw = true, frameN = 0;
+function frame(t) {
+  const dt = last ? Math.min(0.1, (t - last) / 1000) : 1 / 60;
+  last = t;
+  if (intro < 1) { intro = Math.min(1, intro + dt / 1.6); needsDraw = true; }
+  if (running) {
+    want += P.rate * dt;
+    const n = want | 0;
+    const t0 = performance.now();
+    const done = erodeDrops(n, t0 + (SMALL ? 7 : 10));
+    want = done < n ? 0 : want - n;
+    totalDrops += done;
+    rateEMA += (done / dt - rateEMA) * 0.08;
+    updateDynamic(0.965);
+    needsDraw = true;
+    frameN++;
+    readouts(frameN % 20 === 0);
+  }
+  if (needsDraw) { if (gl) render(); else renderFlat(); needsDraw = false; }
+  requestAnimationFrame(frame);
+}
+
+/* ---------- input: orbit / zoom ---------- */
+const ptrs = new Map();
+let pinch0 = 0, dist0 = 0;
+const surface = () => (gl ? canvas : flat);
+function onDown(e) {
+  surface().setPointerCapture && surface().setPointerCapture(e.pointerId);
+  ptrs.set(e.pointerId, { x: e.clientX, y: e.clientY });
+  if (ptrs.size === 2) { const [a, b] = [...ptrs.values()]; pinch0 = Math.hypot(a.x - b.x, a.y - b.y); dist0 = cam.dist; }
+  intro = 1;
+}
+function onMove(e) {
+  const p = ptrs.get(e.pointerId); if (!p) return;
+  if (ptrs.size === 1) {
+    cam.yaw -= (e.clientX - p.x) * 0.008; cam.pitch += (e.clientY - p.y) * 0.006;
+  }
+  p.x = e.clientX; p.y = e.clientY;
+  if (ptrs.size === 2) {
+    const [a, b] = [...ptrs.values()]; const d = Math.hypot(a.x - b.x, a.y - b.y);
+    if (pinch0 > 0) cam.dist = dist0 * pinch0 / Math.max(1, d);
+  }
+  clampCam(); needsDraw = true;
+}
+function onUp(e) { ptrs.delete(e.pointerId); if (ptrs.size < 2) pinch0 = 0; }
+[canvas, $('flat')].forEach(el => {
+  el.addEventListener('pointerdown', onDown);
+  el.addEventListener('pointermove', onMove);
+  el.addEventListener('pointerup', onUp);
+  el.addEventListener('pointercancel', onUp);
+  el.addEventListener('wheel', e => { e.preventDefault(); cam.dist *= Math.exp(e.deltaY * 0.0012); intro = 1; clampCam(); needsDraw = true; }, { passive: false });
+});
+canvas.addEventListener('keydown', e => {
+  let used = true;
+  if (e.key === 'ArrowLeft') cam.yaw += 0.08;
+  else if (e.key === 'ArrowRight') cam.yaw -= 0.08;
+  else if (e.key === 'ArrowUp') cam.pitch += 0.06;
+  else if (e.key === 'ArrowDown') cam.pitch -= 0.06;
+  else if (e.key === '+' || e.key === '=') cam.dist *= 0.9;
+  else if (e.key === '-' || e.key === '_') cam.dist *= 1.1;
+  else used = false;
+  if (used) { e.preventDefault(); intro = 1; clampCam(); needsDraw = true; }
+});
+
+/* ---------- controls ---------- */
+const store = {
+  get() { try { return JSON.parse(localStorage.getItem('rain-carver') || 'null'); } catch (e) { return null; } },
+  set() { try { localStorage.setItem('rain-carver', JSON.stringify({ P, flowOn })); } catch (e) { /* storage unavailable */ } }
+};
+const fmt = {
+  rate: v => (v / 1000).toFixed(0) + 'k/s', erode: v => v.toFixed(2), deposit: v => v.toFixed(2),
+  evap: v => (v * 100).toFixed(1) + '%', inertia: v => v.toFixed(2)
+};
+const keysP = ['rate', 'erode', 'deposit', 'evap', 'inertia'];
+if (SMALL) $('rate').max = '40000';
+function syncInputs() {
+  keysP.forEach(k => { $(k).value = P[k]; $(k + 'Out').textContent = fmt[k](P[k]); });
+  $('flowBtn').setAttribute('aria-pressed', String(flowOn));
+  $('splitBtn').setAttribute('aria-pressed', String(splitOn));
+  $('run').firstChild.nodeValue = running ? 'Pause rain ' : 'Start rain ';
+}
+keysP.forEach(k => $(k).addEventListener('input', e => {
+  P[k] = parseFloat(e.target.value); $(k + 'Out').textContent = fmt[k](P[k]); store.set();
+}));
+function toggleRun() { running = !running; want = 0; syncInputs(); readouts(false); }
+function toggleFlow() { flowOn = !flowOn; syncInputs(); store.set(); updateDynamic(1); needsDraw = true; }
+function toggleSplit() {
+  splitOn = !splitOn; syncInputs();
+  if (gl) { lblB.hidden = !splitOn; lblA.hidden = !splitOn; }
+  updateDynamic(1); needsDraw = true;
+}
+function resetCam() { cam.yaw = CAM0.yaw; cam.pitch = CAM0.pitch; cam.dist = CAM0.dist; intro = 1; needsDraw = true; }
+let busy = false;
+function reseed() {
+  if (busy) return;
+  busy = true; const b = $('newSeed'); b.disabled = true; $('busy').textContent = 'Carving new terrain…';
+  setTimeout(() => {
+    newWorld((Math.random() * 4294967296) >>> 0);
+    if (!REDUCED) intro = 0.35;
+    busy = false; b.disabled = false; $('busy').textContent = '';
+  }, 30);
+}
+$('run').addEventListener('click', toggleRun);
+$('newSeed').addEventListener('click', reseed);
+$('flowBtn').addEventListener('click', toggleFlow);
+$('splitBtn').addEventListener('click', toggleSplit);
+$('resetCam').addEventListener('click', resetCam);
+$('defaults').addEventListener('click', () => { Object.assign(P, DEF); syncInputs(); store.set(); });
+document.addEventListener('keydown', e => {
+  if (e.ctrlKey || e.metaKey || e.altKey) return;
+  const tg = e.target, tag = tg && tg.tagName;
+  if (tag === 'INPUT' || tag === 'SELECT' || tag === 'TEXTAREA') return;
+  const k = e.key.toLowerCase();
+  if (k === ' ' && tag !== 'BUTTON') { e.preventDefault(); toggleRun(); }
+  else if (k === 'n') reseed();
+  else if (k === 'f') toggleFlow();
+  else if (k === 'b') toggleSplit();
+  else if (k === 'r') resetCam();
+});
+
+/* ---------- boot ---------- */
+const saved = store.get();
+if (saved && saved.P) keysP.forEach(k => { const v = +saved.P[k]; if (isFinite(v) && v >= +$(k).min && v <= +$(k).max) P[k] = v; });
+if (saved && typeof saved.flowOn === 'boolean') flowOn = saved.flowOn;
+syncInputs();
+if (gl) {
+  try { initGL(); } catch (err) { console.warn('WebGL setup failed:', err.message); initFlat('shader setup failed'); }
+  canvas.addEventListener('webglcontextlost', e => { e.preventDefault(); initFlat('graphics context lost'); needsDraw = true; });
+} else initFlat('WebGL is not available');
+if (gl) resize();
+window.addEventListener('resize', () => { if (gl) resize(); else needsDraw = true; });
+newWorld(1234567 + ((Math.random() * 1e6) | 0));
+if (gl) render(); else renderFlat();
+needsDraw = false;
+requestAnimationFrame(frame);
+})();
+</script>
+</body>
+</html>
