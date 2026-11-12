@@ -1,0 +1,498 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>Phase Space Sculpture</title>
+<meta name="description" content="Hundreds of thousands of particles trace eight classic strange attractors in 3D, with live parameters, trails and morphing between systems.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,300..700;1,9..144,300..600&family=Manrope:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+/* Layout: one dark observatory world; the particle stage is the hero on the left, an instrument rail of grouped controls on the right (stacked below on phones). */
+:root {
+  --night: #090c15;      /* stage and page ground, blue-biased black */
+  --slate: #121828;      /* panel ground */
+  --rule: #273049;       /* hairlines and slider tracks */
+  --mist: #93a0bd;       /* secondary text */
+  --chalk: #e7ebf5;      /* primary text */
+  --amber: #f0b45e;      /* the one warm accent: active state, focus */
+  --display: "Fraunces", "Iowan Old Style", "Palatino Linotype", Georgia, serif;
+  --ui: "Manrope", "Segoe UI", "Helvetica Neue", sans-serif;
+  --mono: "JetBrains Mono", "Cascadia Mono", Consolas, "Courier New", monospace;
+  color-scheme: dark;
+}
+* { box-sizing: border-box; }
+html { background: var(--night); }
+body {
+  margin: 0; background: var(--night); color: var(--chalk);
+  font: 14px/1.45 var(--ui);
+  padding-left: max(16px, env(safe-area-inset-left, 0px));
+  padding-right: max(16px, env(safe-area-inset-right, 0px));
+  padding-block: max(12px, env(safe-area-inset-top, 0px)) max(16px, env(safe-area-inset-bottom, 0px));
+  min-height: 100dvh;
+  -webkit-font-smoothing: antialiased;
+}
+.top { display: flex; align-items: baseline; gap: 8px 20px; flex-wrap: wrap; padding-bottom: 12px; }
+.top h1 { font: 500 26px/1.1 var(--display); font-variation-settings: "opsz" 96; margin: 0; letter-spacing: -0.01em; text-wrap: balance; }
+.top p { margin: 0; color: var(--mist); min-width: 0; flex: 1 1 280px; text-wrap: pretty; }
+.layout { display: grid; grid-template-columns: minmax(0, 1fr) 344px; gap: 16px; height: calc(100dvh - 92px); min-height: 560px; }
+.stage { position: relative; min-width: 0; border: 1px solid var(--rule); border-radius: 4px; overflow: hidden; background: var(--night); }
+#view { position: absolute; inset: 0; width: 100%; height: 100%; display: block; touch-action: none; cursor: grab; }
+#view:active { cursor: grabbing; }
+#view:focus-visible { outline: 2px solid var(--amber); outline-offset: -3px; }
+.ov { position: absolute; pointer-events: none; }
+.tl { left: 18px; top: 14px; max-width: calc(100% - 36px); }
+.tl .eyebrow { margin: 0 0 2px; font: 600 11px/1.3 var(--ui); letter-spacing: 0.16em; text-transform: uppercase; color: var(--amber); }
+.tl h2 { margin: 0; font: 300 clamp(34px, 5vw, 60px)/1 var(--display); font-variation-settings: "opsz" 144; letter-spacing: -0.02em; text-wrap: balance; }
+.bl { left: 18px; bottom: 14px; display: flex; gap: 18px; font: 12px/1.3 var(--mono); color: var(--mist); font-variant-numeric: tabular-nums; }
+.bl b { display: block; font-weight: 500; color: var(--chalk); font-size: 13px; }
+.br { right: 18px; bottom: 14px; font-size: 12px; color: var(--mist); text-align: right; }
+#glFail { position: absolute; inset: 0; display: grid; place-items: center; padding: 24px; text-align: center; color: var(--mist); }
+#glFail[hidden] { display: none; }
+.panel { min-width: 0; overflow-y: auto; display: flex; flex-direction: column; gap: 18px; padding-right: 2px; scrollbar-width: thin; scrollbar-color: var(--rule) transparent; }
+.group { display: flex; flex-direction: column; gap: 10px; min-width: 0; }
+.label { margin: 0; font: 600 11px/1.3 var(--ui); letter-spacing: 0.16em; text-transform: uppercase; color: var(--mist); }
+.picker { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 6px; }
+button, select { font: 600 13px/1 var(--ui); color: var(--chalk); background: var(--slate); border: 1px solid var(--rule); border-radius: 3px; min-height: 36px; padding: 0 10px; cursor: pointer; min-width: 0; }
+button:hover, select:hover { border-color: var(--mist); }
+button[aria-pressed="true"] { border-color: var(--amber); color: var(--amber); background: #1b1a1c; }
+.picker button { padding: 0 4px; font-size: 12px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.picker button small { display: block; font: 400 10px/1 var(--mono); color: var(--mist); margin-top: 3px; }
+.picker button { min-height: 44px; }
+:focus-visible { outline: 2px solid var(--amber); outline-offset: 2px; }
+.card { background: var(--slate); border: 1px solid var(--rule); border-radius: 4px; padding: 14px 14px 12px; display: flex; flex-direction: column; gap: 12px; min-width: 0; }
+.eq { margin: 0; font: 400 17px/1.55 var(--display); font-variation-settings: "opsz" 24; overflow-x: auto; }
+.eq div { white-space: nowrap; }
+.eq var { font-style: italic; }
+.note { margin: 0; color: var(--mist); font-size: 13px; text-wrap: pretty; }
+.row { display: grid; grid-template-columns: 74px minmax(0, 1fr) 64px; align-items: center; gap: 10px; min-width: 0; }
+.row label { color: var(--mist); font-size: 13px; min-width: 0; }
+.row label i { font: italic 16px/1 var(--display); color: var(--chalk); }
+.row output { font: 12px/1 var(--mono); text-align: right; font-variant-numeric: tabular-nums; color: var(--chalk); }
+input[type=range] { width: 100%; min-width: 0; margin: 0; height: 28px; background: transparent; -webkit-appearance: none; appearance: none; cursor: pointer; }
+input[type=range]::-webkit-slider-runnable-track { height: 3px; background: var(--rule); border-radius: 2px; }
+input[type=range]::-moz-range-track { height: 3px; background: var(--rule); border-radius: 2px; }
+input[type=range]::-webkit-slider-thumb { -webkit-appearance: none; width: 14px; height: 14px; margin-top: -5.5px; border-radius: 50%; background: var(--chalk); border: 2px solid var(--night); }
+input[type=range]::-moz-range-thumb { width: 12px; height: 12px; border-radius: 50%; background: var(--chalk); border: 2px solid var(--night); }
+input[type=range]:focus-visible { outline-offset: 0; }
+.btns { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 6px; }
+.two { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 10px; }
+.two label { display: flex; flex-direction: column; gap: 5px; color: var(--mist); font-size: 13px; min-width: 0; }
+.ghost { background: transparent; align-self: flex-start; min-height: 30px; font-size: 12px; color: var(--mist); }
+.keys { margin: 0; color: var(--mist); font-size: 12px; }
+kbd { font: 11px/1 var(--mono); border: 1px solid var(--rule); border-radius: 3px; padding: 2px 5px; color: var(--chalk); }
+@media (max-width: 860px) {
+  .layout { grid-template-columns: minmax(0, 1fr); height: auto; min-height: 0; }
+  .stage { height: 56vh; min-height: 360px; }
+  .panel { overflow: visible; }
+  .br { display: none; }
+}
+@media (max-width: 420px) {
+  .picker { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+  .row { grid-template-columns: 64px minmax(0, 1fr) 58px; }
+}
+</style>
+</head>
+<body>
+<header class="top">
+  <h1>Phase Space Sculpture</h1>
+  <p>Each point is a state of a three-variable system, carried along by its equations. Change a parameter and watch the whole shape bend.</p>
+</header>
+<main class="layout">
+  <section class="stage" id="stage" aria-label="Attractor view">
+    <canvas id="view" tabindex="0" aria-label="3D particle view. Drag to orbit, scroll or pinch to zoom, arrow keys to orbit."></canvas>
+    <div class="ov tl"><p class="eyebrow" id="sysMeta"></p><h2 id="sysName"></h2></div>
+    <div class="ov bl" aria-live="off">
+      <span>particles<b id="rCount">0</b></span>
+      <span>fps<b id="rFps">0</b></span>
+      <span>step h<b id="rDt">0</b></span>
+      <span>time t<b id="rT">0</b></span>
+    </div>
+    <div class="ov br">Drag to orbit, scroll or pinch to zoom</div>
+    <div id="glFail" hidden><p>This view needs WebGL, and the browser refused to start it. Try another browser or turn on hardware acceleration.</p></div>
+  </section>
+  <aside class="panel">
+    <section class="group" aria-labelledby="lSys">
+      <h3 class="label" id="lSys">System</h3>
+      <div class="picker" id="picker"></div>
+    </section>
+    <section class="card" aria-labelledby="lEq">
+      <h3 class="label" id="lEq">Equations</h3>
+      <div class="eq" id="eq"></div>
+      <div id="params" class="group"></div>
+      <p class="note" id="note"></p>
+      <button class="ghost" id="resetP" type="button">Reset parameters</button>
+    </section>
+    <section class="group" aria-labelledby="lFlow">
+      <h3 class="label" id="lFlow">Flow</h3>
+      <div class="row"><label for="speed">Speed</label><input id="speed" type="range" min="0.1" max="3" step="0.05" value="1"><output id="oSpeed" for="speed">1.00x</output></div>
+      <div class="row"><label for="trail">Trails</label><input id="trail" type="range" min="0" max="0.97" step="0.01" value="0.82"><output id="oTrail" for="trail">0.82</output></div>
+      <div class="two">
+        <label for="count">Particles<select id="count"><option value="20000">20,000</option><option value="60000">60,000</option><option value="150000">150,000</option><option value="300000">300,000</option></select></label>
+        <label for="palette">Palette<select id="palette"><option value="ember">Ember</option><option value="glacier">Glacier</option><option value="verdigris">Verdigris</option><option value="chalk">Chalk</option></select></label>
+      </div>
+      <div class="btns">
+        <button id="scatter" type="button">Scatter</button>
+        <button id="rotate" type="button" aria-pressed="true">Auto-rotate</button>
+        <button id="pause" type="button" aria-pressed="false">Pause</button>
+      </div>
+      <p class="keys">Drag the view to orbit, pinch or scroll to zoom. <kbd>1</kbd>-<kbd>8</kbd> system, <kbd>S</kbd> scatter, <kbd>R</kbd> rotate, <kbd>Space</kbd> pause, arrows orbit, <kbd>+</kbd> <kbd>-</kbd> zoom. Colour shows speed along the flow, slow to fast.</p>
+    </section>
+  </aside>
+</main>
+<script>
+"use strict";
+// ---------- systems: standard equations and parameters ----------
+const SYS = [
+  { id: "lorenz", name: "Lorenz", meta: "Edward Lorenz, 1963", dt: 0.006, bound: 400, init: [1, 1, 1],
+    p: [["sigma", "σ", 10, 0, 20, 0.1], ["rho", "ρ", 28, 0, 50, 0.01], ["beta", "β", 8 / 3, 0.1, 5, 0.001]],
+    f: ["sigma*(Y-X)", "X*(rho-Z)-Y", "X*Y-beta*Z"],
+    eq: ["ẋ = σ(y − x)", "ẏ = x(ρ − z) − y", "ż = xy − βz"],
+    note: "A three-mode model of convection in a fluid layer heated from below. Below ρ ≈ 24.74 the two steady convection states become stable; below about 24.06 every orbit settles onto one of them." },
+  { id: "rossler", name: "Rössler", meta: "Otto Rössler, 1976", dt: 0.035, bound: 300, init: [1, 1, 0],
+    p: [["a", "a", 0.2, 0, 0.4, 0.001], ["b", "b", 0.2, 0.01, 2, 0.01], ["c", "c", 5.7, 1, 14, 0.01]],
+    f: ["-Y-Z", "X+a*Y", "b+Z*(X-c)"],
+    eq: ["ẋ = −y − z", "ẏ = x + ay", "ż = b + z(x − c)"],
+    note: "Built to be about as simple as a chaotic flow can be: one nonlinear term, zx. Orbits spiral outward in the plane, lift, and fold back in. Slide c down to 4 or less to see period doubling." },
+  { id: "aizawa", name: "Aizawa", meta: "Spheroid with an axial tube", dt: 0.012, bound: 30, init: [0.1, 0, 0],
+    p: [["a", "a", 0.95, 0.5, 1.2, 0.01], ["b", "b", 0.7, 0.4, 1, 0.01], ["c", "c", 0.6, 0.3, 0.8, 0.01], ["d", "d", 3.5, 1, 5, 0.01], ["e", "e", 0.25, 0, 0.6, 0.01], ["f", "f", 0.1, 0, 0.3, 0.01]],
+    f: ["(Z-b)*X-d*Y", "d*X+(Z-b)*Y", "c+a*Z-Z*Z*Z/3-(X*X+Y*Y)*(1+e*Z)+f*Z*X*X*X"],
+    eq: ["ẋ = (z − b)x − dy", "ẏ = dx + (z − b)y", "ż = c + az − z³/3 − (x² + y²)(1 + ez) + fzx³"],
+    note: "Six parameters shape a spheroidal shell pierced by a tube along the z axis. The term d sets how fast orbits wind around that axis." },
+  { id: "thomas", name: "Thomas", meta: "René Thomas, 1999", dt: 0.09, bound: 80, init: [0.1, 0, 0],
+    p: [["b", "b", 0.208186, 0.05, 0.35, 0.000001]],
+    f: ["Math.sin(Y)-b*X", "Math.sin(Z)-b*Y", "Math.sin(X)-b*Z"],
+    eq: ["ẋ = sin y − bx", "ẏ = sin z − by", "ż = sin x − bz"],
+    note: "Cyclically symmetric in x, y and z, with a single damping constant b. Near b ≈ 0.208186 the periodic motion gives way to chaos; smaller b tangles the flow further." },
+  { id: "halvorsen", name: "Halvorsen", meta: "Three-fold symmetric flow", dt: 0.008, bound: 80, init: [-1.48, -1.51, 2.04],
+    p: [["a", "a", 1.4, 1.2, 2.4, 0.01]],
+    f: ["-a*X-4*Y-4*Z-Y*Y", "-a*Y-4*Z-4*X-Z*Z", "-a*Z-4*X-4*Y-X*X"],
+    eq: ["ẋ = −ax − 4y − 4z − y²", "ẏ = −ay − 4z − 4x − z²", "ż = −az − 4x − 4y − x²"],
+    note: "Each equation is the previous one with x, y, z rotated, so the shape has three-fold symmetry about the line x = y = z. At a = 1.4 the flow is chaotic; push a up toward 1.89 and the orbits settle onto a closed loop." },
+  { id: "dadras", name: "Dadras", meta: "Dadras and Momeni, 2009", dt: 0.009, bound: 120, init: [1.1, 2.1, -2],
+    p: [["a", "a", 3, 1, 5, 0.01], ["b", "b", 2.7, 1, 4, 0.01], ["c", "c", 1.7, 0.5, 3, 0.01], ["d", "d", 2, 1, 4, 0.01], ["e", "e", 9, 4, 12, 0.01]],
+    f: ["Y-a*X+b*Y*Z", "c*Y-X*Z+Z", "d*X*Y-e*Z"],
+    eq: ["ẋ = y − ax + byz", "ẏ = cy − xz + z", "ż = dxy − ez"],
+    note: "A quadratic flow whose parameters select between multi-scroll shapes. The standard set a = 3, b = 2.7, c = 1.7, d = 2, e = 9 gives the wings shown here." },
+  { id: "chen", name: "Chen", meta: "Guanrong Chen and Tetsushi Ueta, 1999", dt: 0.0028, bound: 500, init: [-0.1, 0.5, -0.6],
+    p: [["a", "a", 35, 20, 45, 0.1], ["b", "b", 3, 1, 6, 0.01], ["c", "c", 28, 18, 30, 0.01]],
+    f: ["a*(Y-X)", "(c-a)*X-X*Z+c*Y", "X*Y-b*Z"],
+    eq: ["ẋ = a(y − x)", "ẏ = (c − a)x − xz + cy", "ż = xy − bz"],
+    note: "Found while applying feedback control to the Lorenz system. Same quadratic terms, a different sign pattern, a tighter double scroll." },
+  { id: "sprott", name: "Sprott", meta: "J. C. Sprott, 2014", dt: 0.016, bound: 40, init: [0.63, 0.47, -0.54],
+    p: [["a", "a", 2.07, 1.5, 2.6, 0.01], ["b", "b", 1.79, 1.2, 2.2, 0.01]],
+    f: ["Y+a*X*Y+X*Z", "1-b*X*X+Y*Z", "X-X*X-Y*Y"],
+    eq: ["ẋ = y + axy + xz", "ẏ = 1 − bx² + yz", "ż = x − x² − y²"],
+    note: "From a 2014 paper on a flow where a strange attractor coexists with invariant tori: which one an orbit settles on depends on where it starts." }
+];
+// RK4 step over all particles, generated per system so the derivative is inlined in the hot loop.
+for (const s of SYS) {
+  const names = s.p.map((q, i) => `${q[0]}=p[${i}]`).join(",");
+  const d = (k) => `X=${k[0]};Y=${k[1]};Z=${k[2]};const a${k[3]}=${s.f[0]},b${k[3]}=${s.f[1]},c${k[3]}=${s.f[2]};`;
+  s.step = new Function("P", "S", "n", "h", "B2", "p", `const ${names};const h2=h*0.5,h6=h/6;let X,Y,Z;
+for(let i=0,j=0;i<n;i++,j+=3){const x=P[j],y=P[j+1],z=P[j+2];
+${d(["x", "y", "z", 1])}
+${d(["x+h2*a1", "y+h2*b1", "z+h2*c1", 2])}
+${d(["x+h2*a2", "y+h2*b2", "z+h2*c2", 3])}
+${d(["x+h*a3", "y+h*b3", "z+h*c3", 4])}
+const nx=x+h6*(a1+2*a2+2*a3+a4),ny=y+h6*(b1+2*b2+2*b3+b4),nz=z+h6*(c1+2*c2+2*c3+c4);
+P[j]=nx;P[j+1]=ny;P[j+2]=nz;S[i]=(nx*nx+ny*ny+nz*nz<B2)?Math.sqrt(a1*a1+b1*b1+c1*c1):-1;}`);
+  s.vals = new Float64Array(s.p.map(q => q[2]));
+}
+
+// ---------- state ----------
+const $ = (id) => document.getElementById(id);
+const phone = matchMedia("(max-width: 600px)").matches;
+const reduce = matchMedia("(prefers-reduced-motion: reduce)").matches;
+let N = phone ? 60000 : 300000;
+let P, S, buf, from, delay;
+let cur = 0, simT = 0, paused = false, autoRot = !reduce;
+let speed = reduce ? 0.35 : 1, trail = reduce ? 0 : 0.82;
+const fit = { c: [0, 0, 0], s: 1, tc: [0, 0, 0], ts: 1, hold: 0 };
+let morph = 1, meanV = 1, frameNo = 0;
+const cam = { yaw: 0.6, pitch: 0.28, dist: phone ? 2.7 : 3.3 };
+const PAL = {
+  ember: [[0.42, 0.07, 0.16], [0.95, 0.38, 0.12], [1.0, 0.88, 0.62]],
+  glacier: [[0.08, 0.18, 0.55], [0.22, 0.68, 0.88], [0.86, 0.98, 1.0]],
+  verdigris: [[0.04, 0.32, 0.28], [0.38, 0.80, 0.58], [0.98, 0.94, 0.72]],
+  chalk: [[0.30, 0.34, 0.46], [0.66, 0.71, 0.82], [1.0, 1.0, 1.0]]
+};
+let pal = PAL.ember;
+try { const v = localStorage.getItem("attractor.palette"); if (v && PAL[v]) { pal = PAL[v]; $("palette").value = v; } } catch (e) {}
+
+function alloc(n) {
+  N = n; P = new Float64Array(n * 3); S = new Float32Array(n); buf = new Float32Array(n * 4);
+  from = new Float32Array(n * 3); delay = new Float32Array(n);
+  for (let i = 0; i < n; i++) delay[i] = ((Math.imul(i, 2654435761) >>> 0) / 4294967296) * 0.35;
+}
+
+// Seed every particle on one long pre-integrated orbit, so the first frame already shows the full shape.
+function seed() {
+  const s = SYS[cur], one = new Float64Array(3), sp = new Float32Array(1), B2 = s.bound * s.bound;
+  one.set(s.init);
+  for (let k = 0; k < 4000; k++) s.step(one, sp, 1, s.dt, B2, s.vals);
+  const stride = Math.max(1, Math.ceil(150000 / N));
+  for (let i = 0; i < N; i++) {
+    for (let k = 0; k < stride; k++) s.step(one, sp, 1, s.dt, B2, s.vals);
+    if (sp[0] < 0) { one.set(s.init); one[0] += Math.random() * 0.01; }
+    P[i * 3] = one[0]; P[i * 3 + 1] = one[1]; P[i * 3 + 2] = one[2];
+  }
+  refit(true);
+}
+const sub = [new Float32Array(2000), new Float32Array(2000), new Float32Array(2000)];
+function refit(snap) {
+  const s = SYS[cur], m = sub[0].length, stp = Math.max(1, Math.floor(N / m)) * 3;
+  let k = 0;
+  for (let j = 0; j < N * 3 && k < m; j += stp, k++) for (let a = 0; a < 3; a++) sub[a][k] = P[j + a];
+  let half = 1e-6; const c = [0, 0, 0];
+  for (let a = 0; a < 3; a++) {
+    const arr = sub[a].subarray(0, k).sort(), lo = arr[Math.floor(k * 0.005)], hi = arr[Math.floor(k * 0.995)];
+    if (!isFinite(lo) || !isFinite(hi)) return;
+    c[a] = (lo + hi) / 2; half += ((hi - lo) / 2) ** 2;
+  }
+  let sc = 1 / Math.sqrt(half);
+  if (snap && s.base === undefined && isDefault(s)) s.base = sc;
+  if (s.base) sc = Math.min(Math.max(sc, s.base / 4), s.base * 3);
+  fit.tc = c; fit.ts = sc;
+  if (snap) { fit.c = c.slice(); fit.s = sc; }
+}
+const isDefault = (s) => s.p.every((q, i) => s.vals[i] === q[2]);
+
+// ---------- WebGL ----------
+const canvas = $("view");
+const gl = canvas.getContext("webgl", { antialias: false, alpha: false, depth: false, premultipliedAlpha: false, powerPreference: "high-performance" });
+let ok = !!gl, texType = 0, prog, quad, blit, fade, vbo, fbo, ftex, W = 1, H = 1, dpr = 1;
+function sh(type, src) { const o = gl.createShader(type); gl.shaderSource(o, src); gl.compileShader(o); if (!gl.getShaderParameter(o, gl.COMPILE_STATUS)) throw new Error(gl.getShaderInfoLog(o)); return o; }
+function mk(vs, fs) {
+  const p = gl.createProgram(); gl.attachShader(p, sh(gl.VERTEX_SHADER, vs)); gl.attachShader(p, sh(gl.FRAGMENT_SHADER, fs)); gl.bindAttribLocation(p, 0, "aP"); gl.bindAttribLocation(p, 0, "q"); gl.linkProgram(p);
+  if (!gl.getProgramParameter(p, gl.LINK_STATUS)) throw new Error(gl.getProgramInfoLog(p));
+  const u = {}; const nu = gl.getProgramParameter(p, gl.ACTIVE_UNIFORMS);
+  for (let i = 0; i < nu; i++) { const nm = gl.getActiveUniform(p, i).name; u[nm] = gl.getUniformLocation(p, nm); }
+  return { p, u };
+}
+const QV = "attribute vec2 q;varying vec2 uv;void main(){uv=q*.5+.5;gl_Position=vec4(q,0.,1.);}";
+function initGL() {
+  prog = mk(`attribute vec4 aP;uniform mat4 uMV,uPr;uniform float uSize,uGain,uDist;uniform vec3 uC0,uC1,uC2;varying vec3 vC;
+void main(){vec4 v=uMV*vec4(aP.xyz,1.);gl_Position=uPr*v;float dz=-v.z;float sz=uSize/dz;gl_PointSize=max(sz,1.);
+float t=clamp(aP.w,0.,1.);vec3 c=t<.5?mix(uC0,uC1,t*2.):mix(uC1,uC2,t*2.-1.);
+float f=mix(1.25,.3,smoothstep(uDist-1.1,uDist+1.1,dz));vC=c*uGain*f*min(1.,sz*sz);}`,
+    `precision mediump float;varying vec3 vC;void main(){vec2 q=gl_PointCoord-.5;float a=1.-smoothstep(.12,.25,dot(q,q));gl_FragColor=vec4(vC*a,1.);}`);
+  fade = mk(QV, "precision mediump float;uniform vec4 uK;void main(){gl_FragColor=uK;}");
+  blit = mk(QV, `precision mediump float;uniform sampler2D uT;uniform vec3 uBg;uniform float uTone;varying vec2 uv;void main(){vec3 c=texture2D(uT,uv).rgb;if(uTone>0.)c=1.-exp(-max(c,0.)*uTone);
+vec2 d=uv-.5;float vg=1.-dot(d,d)*.55;gl_FragColor=vec4(uBg*vg+c,1.);}`);
+  quad = gl.createBuffer(); gl.bindBuffer(gl.ARRAY_BUFFER, quad); gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([-1, -1, 1, -1, -1, 1, 1, 1]), gl.STATIC_DRAW);
+  vbo = gl.createBuffer();
+  // Half-float accumulation lets bright cores roll off through a tone curve instead of clipping.
+  const hf = gl.getExtension("OES_texture_half_float"); gl.getExtension("EXT_color_buffer_half_float");
+  texType = hf ? hf.HALF_FLOAT_OES : gl.UNSIGNED_BYTE;
+  ftex = gl.createTexture(); fbo = gl.createFramebuffer();
+}
+function sizeVBO() { gl.bindBuffer(gl.ARRAY_BUFFER, vbo); gl.bufferData(gl.ARRAY_BUFFER, buf.byteLength, gl.DYNAMIC_DRAW); }
+function resize() {
+  const r = canvas.getBoundingClientRect();
+  dpr = Math.min(window.devicePixelRatio || 1, phone ? 1.5 : 2);
+  const w = Math.max(1, Math.round(r.width * dpr)), h = Math.max(1, Math.round(r.height * dpr));
+  if (w === W && h === H) return;
+  W = canvas.width = w; H = canvas.height = h;
+  if (!ok) return;
+  gl.bindTexture(gl.TEXTURE_2D, ftex);
+  gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, W, H, 0, gl.RGBA, texType, null);
+  for (const [k, v] of [[gl.TEXTURE_MIN_FILTER, gl.NEAREST], [gl.TEXTURE_MAG_FILTER, gl.NEAREST], [gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE], [gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE]]) gl.texParameteri(gl.TEXTURE_2D, k, v);
+  gl.bindFramebuffer(gl.FRAMEBUFFER, fbo);
+  gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_2D, ftex, 0);
+  if (texType !== gl.UNSIGNED_BYTE && gl.checkFramebufferStatus(gl.FRAMEBUFFER) !== gl.FRAMEBUFFER_COMPLETE) {
+    texType = gl.UNSIGNED_BYTE; gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, W, H, 0, gl.RGBA, texType, null); // 8-bit fallback
+  }
+  gl.clearColor(0, 0, 0, 1); gl.clear(gl.COLOR_BUFFER_BIT);
+  gl.bindFramebuffer(gl.FRAMEBUFFER, null);
+}
+const MV = new Float32Array(16), PR = new Float32Array(16);
+function matrices() {
+  const cy = Math.cos(cam.yaw), sy = Math.sin(cam.yaw), cp = Math.cos(cam.pitch), sp = Math.sin(cam.pitch);
+  MV.set([cy, sp * sy, -cp * sy, 0, 0, cp, sp, 0, sy, -sp * cy, cp * cy, 0, 0, 0, -cam.dist, 1]);
+  const f = 1 / Math.tan(0.36), nr = 0.05, fr = 50, asp = W / H;
+  PR.fill(0); PR[0] = f / Math.max(asp, 1); PR[5] = f * Math.min(asp, 1);
+  PR[10] = (fr + nr) / (nr - fr); PR[11] = -1; PR[14] = 2 * fr * nr / (nr - fr);
+}
+function quadDraw(p) { gl.bindBuffer(gl.ARRAY_BUFFER, quad); gl.enableVertexAttribArray(0); gl.vertexAttribPointer(0, 2, gl.FLOAT, false, 0, 0); gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4); }
+
+// ---------- simulation + packing ----------
+function pack(fdt) {
+  for (let a = 0; a < 3; a++) { fit.c[a] += (fit.tc[a] - fit.c[a]) * 0.05; }
+  fit.s += (fit.ts - fit.s) * 0.05;
+  const cx = fit.c[0], cy = fit.c[1], cz = fit.c[2], sc = fit.s, inv = 1 / (2 * meanV);
+  let sum = 0, cnt = 0;
+  const mt = morph < 1 ? morph : 1;
+  for (let i = 0, j = 0, o = 0; i < N; i++, j += 3, o += 4) {
+    let v = S[i];
+    if (v < 0) { // escaped or non-finite: respawn on top of a random particle
+      const k = (Math.random() * N | 0) * 3;
+      P[j] = P[k] + (Math.random() - 0.5) * 1e-3; P[j + 1] = P[k + 1] + (Math.random() - 0.5) * 1e-3; P[j + 2] = P[k + 2];
+      if (!isFinite(P[j] + P[j + 1] + P[j + 2])) { P[j] = SYS[cur].init[0] + Math.random() * 0.01; P[j + 1] = SYS[cur].init[1]; P[j + 2] = SYS[cur].init[2]; }
+      v = 0; S[i] = 0;
+    }
+    let x = (P[j] - cx) * sc, y = (P[j + 2] - cz) * sc, z = (P[j + 1] - cy) * sc;
+    if (mt < 1) {
+      let t = (mt - delay[i]) / 0.65; t = t < 0 ? 0 : t > 1 ? 1 : t; t = t * t * (3 - 2 * t);
+      x = from[j] + (x - from[j]) * t; y = from[j + 1] + (y - from[j + 1]) * t; z = from[j + 2] + (z - from[j + 2]) * t;
+    }
+    buf[o] = x; buf[o + 1] = y; buf[o + 2] = z;
+    const vs = v * sc; buf[o + 3] = vs * inv; sum += vs; cnt++;
+  }
+  if (cnt) meanV = Math.max(1e-6, sum / cnt);
+}
+function snapshotFrom(oldBuf, oldN) {
+  for (let i = 0; i < N; i++) { const k = (i % oldN) * 4; from[i * 3] = oldBuf[k]; from[i * 3 + 1] = oldBuf[k + 1]; from[i * 3 + 2] = oldBuf[k + 2]; }
+  morph = 0;
+}
+
+// ---------- UI ----------
+const picker = $("picker");
+SYS.forEach((s, i) => {
+  const b = document.createElement("button"); b.type = "button"; b.id = "sys-" + s.id;
+  b.innerHTML = `${s.name}<small>${i + 1}</small>`; b.setAttribute("aria-pressed", "false");
+  b.setAttribute("aria-label", `${s.name} attractor, key ${i + 1}`);
+  b.onclick = () => choose(i); picker.appendChild(b);
+});
+const esc = (t) => t.replace(/sin/g, "\u0001").replace(/([a-zσρβẋẏż])/g, "<var>$1</var>").replace(/\u0001/g, "sin");
+const fmt = (v, st) => st < 0.001 ? v.toFixed(6) : st < 0.01 ? v.toFixed(3) : st < 0.1 ? v.toFixed(2) : v.toFixed(1);
+function buildPanel() {
+  const s = SYS[cur];
+  $("sysName").textContent = s.name; $("sysMeta").textContent = s.meta;
+  $("eq").innerHTML = s.eq.map(l => `<div>${esc(l)}</div>`).join("");
+  $("note").textContent = s.note;
+  $("rDt").textContent = s.dt.toString();
+  const box = $("params"); box.innerHTML = "";
+  s.p.forEach((q, i) => {
+    const row = document.createElement("div"); row.className = "row";
+    const id = `p-${s.id}-${q[0]}`;
+    row.innerHTML = `<label for="${id}"><i>${q[1]}</i></label><input id="${id}" type="range" min="${q[3]}" max="${q[4]}" step="${q[5]}" value="${s.vals[i]}"><output for="${id}">${fmt(s.vals[i], q[5])}</output>`;
+    const inp = row.querySelector("input"), out = row.querySelector("output");
+    inp.addEventListener("input", () => { s.vals[i] = +inp.value; out.textContent = fmt(s.vals[i], q[5]); fit.hold = 0; });
+    box.appendChild(row);
+  });
+  [...picker.children].forEach((b, i) => b.setAttribute("aria-pressed", String(i === cur)));
+}
+function choose(i) {
+  if (i === cur && morph >= 1) return;
+  cur = i; buildPanel(); simT = 0;
+  if (frameNo > 0) snapshotFrom(buf.slice(), N);
+  seed();
+}
+$("resetP").onclick = () => { const s = SYS[cur]; s.vals.set(s.p.map(q => q[2])); buildPanel(); fit.hold = 0; };
+$("speed").value = speed; $("trail").value = trail;
+const syncOut = () => { $("oSpeed").textContent = speed.toFixed(2) + "x"; $("oTrail").textContent = trail.toFixed(2); };
+$("speed").addEventListener("input", (e) => { speed = +e.target.value; syncOut(); });
+$("trail").addEventListener("input", (e) => { trail = +e.target.value; syncOut(); });
+$("count").value = String(N);
+$("count").addEventListener("change", (e) => {
+  const old = buf, oldN = N; alloc(+e.target.value); if (ok) sizeVBO();
+  seed(); snapshotFrom(old, oldN); $("rCount").textContent = N.toLocaleString("en-US");
+});
+$("palette").addEventListener("change", (e) => { pal = PAL[e.target.value]; try { localStorage.setItem("attractor.palette", e.target.value); } catch (er) {} });
+function scatter() {
+  // Uniform random states in a box about the fitted size: the attractor captures them.
+  const r = 0.9 / fit.s;
+  for (let i = 0; i < N * 3; i += 3) {
+    P[i] = fit.c[0] + (Math.random() * 2 - 1) * r; P[i + 1] = fit.c[1] + (Math.random() * 2 - 1) * r; P[i + 2] = fit.c[2] + (Math.random() * 2 - 1) * r;
+  }
+  fit.hold = 240;
+}
+$("scatter").onclick = scatter;
+function setRot(v) { autoRot = v; $("rotate").setAttribute("aria-pressed", String(v)); }
+function setPause(v) { paused = v; $("pause").setAttribute("aria-pressed", String(v)); $("pause").textContent = v ? "Resume" : "Pause"; }
+$("rotate").onclick = () => setRot(!autoRot);
+$("pause").onclick = () => setPause(!paused);
+setRot(autoRot); syncOut();
+
+// camera input
+const ptrs = new Map(); let pinch0 = 0, dist0 = 0;
+canvas.addEventListener("pointerdown", (e) => { canvas.setPointerCapture(e.pointerId); ptrs.set(e.pointerId, [e.clientX, e.clientY]);
+  if (ptrs.size === 2) { const [a, b] = [...ptrs.values()]; pinch0 = Math.hypot(a[0] - b[0], a[1] - b[1]); dist0 = cam.dist; } });
+canvas.addEventListener("pointermove", (e) => {
+  const p = ptrs.get(e.pointerId); if (!p) return;
+  if (ptrs.size === 1) { cam.yaw += (e.clientX - p[0]) * 0.006; cam.pitch = Math.max(-1.45, Math.min(1.45, cam.pitch + (e.clientY - p[1]) * 0.006)); }
+  p[0] = e.clientX; p[1] = e.clientY;
+  if (ptrs.size === 2) { const [a, b] = [...ptrs.values()]; const d = Math.hypot(a[0] - b[0], a[1] - b[1]); if (pinch0 > 0) cam.dist = clampD(dist0 * pinch0 / d); }
+});
+const up = (e) => { ptrs.delete(e.pointerId); pinch0 = 0; };
+canvas.addEventListener("pointerup", up); canvas.addEventListener("pointercancel", up);
+const clampD = (d) => Math.max(1.4, Math.min(9, d));
+canvas.addEventListener("wheel", (e) => { e.preventDefault(); cam.dist = clampD(cam.dist * Math.exp(e.deltaY * 0.0012)); }, { passive: false });
+addEventListener("keydown", (e) => {
+  const t = e.target; if (t && (t.tagName === "INPUT" || t.tagName === "SELECT") && !e.key.match(/^[1-8]$/)) return;
+  if (e.ctrlKey || e.metaKey || e.altKey) return;
+  const k = e.key;
+  if (k >= "1" && k <= "8" && t.tagName !== "INPUT" && t.tagName !== "SELECT") { choose(+k - 1); }
+  else if (k === "s" || k === "S") scatter();
+  else if (k === "r" || k === "R") setRot(!autoRot);
+  else if (k === " " && t.tagName !== "BUTTON") { e.preventDefault(); setPause(!paused); }
+  else if (t === canvas && k.startsWith("Arrow")) { e.preventDefault();
+    if (k === "ArrowLeft") cam.yaw -= 0.08; if (k === "ArrowRight") cam.yaw += 0.08;
+    if (k === "ArrowUp") cam.pitch = Math.max(-1.45, cam.pitch - 0.08); if (k === "ArrowDown") cam.pitch = Math.min(1.45, cam.pitch + 0.08); }
+  else if (k === "+" || k === "=") cam.dist = clampD(cam.dist / 1.1);
+  else if (k === "-" || k === "_") cam.dist = clampD(cam.dist * 1.1);
+});
+
+// ---------- frame ----------
+let last = performance.now(), fpsS = 60, fpsT = 0;
+function frame(now) {
+  const fdt = Math.min(0.05, Math.max(0.001, (now - last) / 1000)); last = now;
+  fpsS += (1 / fdt - fpsS) * 0.08;
+  const s = SYS[cur];
+  if (!paused) {
+    const h = s.dt * speed * Math.min(2, fdt * 60);
+    s.step(P, S, N, h, s.bound * s.bound, s.vals); simT += h;
+  }
+  if (morph < 1) morph = Math.min(1, morph + fdt / 1.8);
+  if (fit.hold > 0) fit.hold--; else if (frameNo % 30 === 0) refit(false);
+  if (autoRot && !ptrs.size) cam.yaw += fdt * 0.16;
+  pack(fdt); render(); frameNo++;
+  if ((fpsT += fdt) > 0.25) { fpsT = 0; $("rFps").textContent = Math.round(fpsS); $("rT").textContent = simT.toFixed(1); }
+  requestAnimationFrame(frame);
+}
+function render() {
+  if (!ok) return;
+  resize(); matrices();
+  gl.bindFramebuffer(gl.FRAMEBUFFER, fbo); gl.viewport(0, 0, W, H);
+  gl.useProgram(fade.p); gl.enable(gl.BLEND);
+  if (trail <= 0) { gl.clearColor(0, 0, 0, 1); gl.clear(gl.COLOR_BUFFER_BIT); }
+  else {
+    gl.blendEquation(gl.FUNC_ADD); gl.blendFunc(gl.ZERO, gl.SRC_COLOR);
+    gl.uniform4f(fade.u.uK, trail, trail, trail, 1); quadDraw();
+    // 8-bit buffers never decay to zero by multiplication alone; subtract a floor.
+    gl.blendEquation(gl.FUNC_REVERSE_SUBTRACT); gl.blendFunc(gl.ONE, gl.ONE);
+    gl.uniform4f(fade.u.uK, 1.5 / 255, 1.5 / 255, 1.5 / 255, 0); quadDraw();
+  }
+  gl.blendEquation(gl.FUNC_ADD); gl.blendFunc(gl.ONE, gl.ONE);
+  gl.useProgram(prog.p);
+  gl.bindBuffer(gl.ARRAY_BUFFER, vbo); gl.bufferSubData(gl.ARRAY_BUFFER, 0, buf);
+  gl.enableVertexAttribArray(0); gl.vertexAttribPointer(0, 4, gl.FLOAT, false, 0, 0);
+  gl.uniformMatrix4fv(prog.u.uMV, false, MV); gl.uniformMatrix4fv(prog.u.uPr, false, PR);
+  gl.uniform1f(prog.u.uSize, 1.5 * dpr * 3.3); gl.uniform1f(prog.u.uDist, cam.dist);
+  const gain = 0.26 * Math.pow(60000 / N, 0.55) * Math.pow(1 - trail * 0.9, 0.6);
+  gl.uniform1f(prog.u.uGain, gain);
+  gl.uniform3fv(prog.u.uC0, pal[0]); gl.uniform3fv(prog.u.uC1, pal[1]); gl.uniform3fv(prog.u.uC2, pal[2]);
+  gl.drawArrays(gl.POINTS, 0, N);
+  gl.disable(gl.BLEND);
+  gl.bindFramebuffer(gl.FRAMEBUFFER, null); gl.viewport(0, 0, W, H);
+  gl.useProgram(blit.p); gl.activeTexture(gl.TEXTURE0); gl.bindTexture(gl.TEXTURE_2D, ftex);
+  gl.uniform1i(blit.u.uT, 0); gl.uniform1f(blit.u.uTone, texType === gl.UNSIGNED_BYTE ? 0 : 1.2); gl.uniform3f(blit.u.uBg, 0.035, 0.047, 0.083); quadDraw();
+}
+
+// ---------- boot ----------
+alloc(N);
+try { if (ok) { initGL(); sizeVBO(); } } catch (e) { ok = false; console.warn("WebGL setup failed:", e.message); }
+if (!ok) $("glFail").hidden = false;
+if (ok) canvas.addEventListener("webglcontextlost", (e) => { e.preventDefault(); ok = false; $("glFail").hidden = false; });
+buildPanel(); seed();
+$("rCount").textContent = N.toLocaleString("en-US");
+// Pre-integrate a little so particles carry real speeds before the first draw.
+for (let k = 0; k < 3; k++) SYS[cur].step(P, S, N, SYS[cur].dt, SYS[cur].bound ** 2, SYS[cur].vals);
+pack(0); pack(0);
+for (let k = 0; k < 24; k++) render(); // fill the trail buffer to its steady brightness before first paint
+requestAnimationFrame(frame);
+</script>
+</body>
+</html>
