@@ -1,0 +1,638 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>Athanor Sand Bench</title>
+<meta name="description" content="A falling-sand chemistry sandbox where 21 materials fall, flow, burn, melt, dissolve and explode across a live temperature field.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@500;700&family=Karla:wght@400;600;700&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet">
+<style>
+/* Layout: masthead, then the sand bench (hero canvas + readout + transport) beside a reagent cabinet; stacks on phones. Single visual world: a dim alchemist's bench lit by brass and verdigris. */
+:root{
+  --ink:#0e1517;        /* bench shadow, blue-green biased near-black */
+  --slate:#172225;      /* cabinet panels */
+  --line:#2a3a3d;       /* engraved rules */
+  --vellum:#e8e0cb;     /* text, aged paper */
+  --dim:#94a29c;        /* secondary text, lichen grey */
+  --brass:#d1a75b;      /* instrument brass, the accent */
+  --verdigris:#6db5a2;  /* oxidised copper, second accent */
+  --ember:#e9713f;      /* heat */
+  --f-display:"Cinzel","Trajan Pro",Georgia,"Times New Roman",serif;
+  --f-ui:"Karla","Segoe UI","Helvetica Neue",sans-serif;
+  --f-mono:"JetBrains Mono",ui-monospace,Consolas,"Courier New",monospace;
+  color-scheme:dark;
+}
+*{box-sizing:border-box}
+html{background:var(--ink)}
+body{margin:0;background:var(--ink);color:var(--vellum);font:15px/1.45 var(--f-ui);
+  padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}
+.wrap{max-width:1320px;margin:0 auto;padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));padding-block:14px 20px}
+.mast{display:flex;align-items:baseline;gap:6px 18px;flex-wrap:wrap;padding-bottom:10px;border-bottom:1px solid var(--line);margin-bottom:14px}
+.mast h1{font:700 clamp(22px,3vw,30px)/1.05 var(--f-display);letter-spacing:.14em;margin:0;color:var(--brass);text-wrap:balance}
+.mast p{margin:0;color:var(--dim);min-width:0;flex:1 1 300px;text-wrap:pretty}
+.bench{display:grid;grid-template-columns:minmax(0,1fr) 292px;gap:16px;align-items:start}
+.stage{min-width:0;display:flex;flex-direction:column;gap:10px}
+.frame{position:relative;border:1px solid var(--line);background:color-mix(in srgb,var(--ink) 70%,#000);padding:5px;border-radius:3px;box-shadow:0 0 0 1px color-mix(in srgb,var(--ink) 40%,#000) inset}
+.frame.jolt{animation:jolt .22s linear}
+@keyframes jolt{25%{transform:translate(2px,-1px)}50%{transform:translate(-2px,1px)}75%{transform:translate(1px,1px)}}
+canvas#sim{display:block;width:100%;height:auto;image-rendering:pixelated;image-rendering:crisp-edges;touch-action:none;cursor:crosshair;background:var(--ink)}
+.readout{display:flex;flex-wrap:wrap;gap:4px 16px;font:12.5px/1.3 var(--f-mono);color:var(--dim);font-variant-numeric:tabular-nums;min-height:17px}
+.readout b{color:var(--vellum);font-weight:600}
+.readout .t{color:var(--ember)}
+.transport{display:flex;flex-wrap:wrap;gap:8px 10px;align-items:center}
+.transport > *{min-width:0}
+button,select{font:600 13px/1 var(--f-ui);color:var(--vellum);background:var(--slate);border:1px solid var(--line);border-radius:3px;padding:8px 11px;cursor:pointer}
+button:hover,select:hover{border-color:color-mix(in srgb,var(--line) 60%,var(--verdigris))}
+button[aria-pressed="true"]{border-color:var(--brass);color:var(--brass)}
+:focus-visible{outline:2px solid var(--verdigris);outline-offset:2px}
+.field{display:flex;align-items:center;gap:8px;font-size:12px;color:var(--dim);text-transform:uppercase;letter-spacing:.09em;font-weight:700}
+.field input[type=range]{width:110px;accent-color:var(--brass)}
+.field output{font:600 12px var(--f-mono);color:var(--vellum);min-width:2ch;font-variant-numeric:tabular-nums;letter-spacing:0}
+.field input[type=checkbox]{accent-color:var(--brass);width:16px;height:16px;margin:0}
+.sep{flex:1 1 0}
+.cabinet{min-width:0;background:var(--slate);border:1px solid var(--line);border-radius:3px;padding:12px 12px 14px;display:flex;flex-direction:column;gap:12px}
+.grp h2{margin:0 0 6px;font:700 11px/1 var(--f-ui);letter-spacing:.16em;text-transform:uppercase;color:var(--verdigris)}
+.swatches{display:grid;grid-template-columns:repeat(auto-fill,minmax(112px,1fr));gap:5px}
+.sw{display:flex;align-items:center;gap:7px;padding:6px 7px;font-weight:600;font-size:12.5px;background:color-mix(in srgb,var(--slate) 60%,var(--ink));text-align:left;min-width:0}
+.sw i{flex:none;width:14px;height:14px;border-radius:2px;box-shadow:0 0 0 1px color-mix(in srgb,var(--ink) 55%,transparent) inset}
+.sw span{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.sw[aria-pressed="true"]{background:color-mix(in srgb,var(--slate) 85%,var(--brass))}
+.note{border-top:1px solid var(--line);padding-top:10px;font-size:13.5px;color:var(--vellum);min-height:6.2em}
+.note strong{display:block;font:700 15px/1.2 var(--f-display);letter-spacing:.08em;color:var(--brass);margin-bottom:3px}
+.keys{margin:0;font-size:12px;color:var(--dim);line-height:1.6}
+kbd{font:600 11px var(--f-mono);border:1px solid var(--line);border-bottom-width:2px;border-radius:3px;padding:0 4px;color:var(--vellum)}
+.foot{margin-top:16px;color:var(--dim);font-size:13px;max-width:72ch}
+.foot em{font-family:var(--f-display);font-style:normal;color:var(--brass);letter-spacing:.06em}
+@media (max-width:900px){.bench{grid-template-columns:minmax(0,1fr)}}
+@media (max-width:600px){.field input[type=range]{width:90px}.sep{display:none}.mast p{font-size:13.5px}}
+@media (prefers-reduced-motion:reduce){.frame.jolt{animation:none}}
+</style>
+</head>
+<body>
+<div class="wrap">
+<header class="mast">
+  <h1>Athanor</h1>
+  <p>A falling-sand chemistry bench. Pour reagents, light them and watch them fall, flow, burn, melt, dissolve and explode.</p>
+</header>
+<main class="bench">
+  <section class="stage" aria-label="Sand bench">
+    <div class="frame" id="frame"><canvas id="sim" aria-label="Simulation. Drag to pour the selected element; right-click or Shift to erase."></canvas></div>
+    <div class="readout" id="readout" aria-live="off"><span>Under brush <b id="roEl">Empty</b></span><span class="t" id="roT">20 °C</span><span id="roXY">x 0 y 0</span><span id="roTick">tick 0</span></div>
+    <div class="transport">
+      <button id="btnPause" type="button" aria-pressed="false">Pause</button>
+      <button id="btnStep" type="button">Step one tick</button>
+      <button id="btnClear" type="button">Clear bench</button>
+      <button id="btnHeat" type="button" aria-pressed="false">Heat view</button>
+      <label class="field" for="brush">Brush <input id="brush" type="range" min="1" max="18" value="4"><output id="brushOut" for="brush">4</output></label>
+      <label class="field" for="spray"><input id="spray" type="checkbox"> Spray</label>
+      <span class="sep"></span>
+      <label class="field" for="scene">Scene
+        <select id="scene">
+          <option value="volcano">Volcano island</option>
+          <option value="refinery">Refinery fire</option>
+          <option value="cave">Ice cave</option>
+          <option value="flask">Alchemist's flask</option>
+          <option value="empty">Empty bench</option>
+        </select>
+      </label>
+    </div>
+  </section>
+  <aside class="cabinet" aria-label="Reagent cabinet">
+    <div id="palette"></div>
+    <div class="note" id="note" aria-live="polite"></div>
+    <p class="keys"><kbd>Space</kbd> pause <kbd>.</kbd> step <kbd>[</kbd><kbd>]</kbd> brush <kbd>S</kbd> spray <kbd>E</kbd> eraser <kbd>H</kbd> heat view <kbd>1</kbd>-<kbd>4</kbd> scenes. Right-click or <kbd>Shift</kbd> erases.</p>
+  </aside>
+</main>
+<p class="foot"><em>Athanor</em> was the alchemist's furnace: a tower fed slowly with charcoal from above so it could hold an even heat for days. This bench runs a cellular automaton bottom-up with alternating scan direction, sorts fluids by density, and carries a temperature in every cell.</p>
+</div>
+<script>
+(()=>{
+"use strict";
+// ---------- elements ----------
+const K_EMPTY=0,K_SOLID=1,K_POWDER=2,K_LIQUID=3,K_GAS=4,K_FIRE=5;
+const EMPTY=0,SAND=1,WETSAND=2,WATER=3,SALT=4,SALTWATER=5,STONE=6,WOOD=7,PLANT=8,FIRE=9,SMOKE=10,STEAM=11,LAVA=12,BASALT=13,ICE=14,OIL=15,ACID=16,POWDER=17,METAL=18,ASH=19,HYDRO=20,GLASS=21,NT=22;
+// dens: kg/m^3-like ordering used only for displacement; air (empty) = 1.2
+const DEF=[
+ [EMPTY,"Eraser","Energy",K_EMPTY,1.2,[0,0,0],0,20,.10,"Removes material under the brush. Right-click or hold Shift with any element to erase."],
+ [SAND,"Sand","Powders",K_POWDER,1600,[214,186,128],16,20,.04,"Quartz grains. Dry sand piles at an angle of repose of about 30 to 35 degrees; water turns it to wet sand."],
+ [WETSAND,"Wet sand","Powders",K_POWDER,1900,[146,120,80],10,20,.08,"Water bridges between the grains let wet sand stand in steep walls. Heat above 100 °C dries it back to sand."],
+ [WATER,"Water","Liquids",K_LIQUID,1000,[42,104,184],9,20,.16,"1.00 g/cm³. Boils at 100 °C at sea-level pressure, quenches lava to basalt and puts out burning wood."],
+ [SALT,"Salt","Powders",K_POWDER,2160,[236,232,224],9,20,.06,"Halite, NaCl, 2.16 g/cm³. Dissolves into water as brine and melts ice by lowering its freezing point."],
+ [SALTWATER,"Salt water","Liquids",K_LIQUID,1030,[58,124,160],9,20,.16,"Seawater carries about 3.5% salt and is denser than fresh water, so it settles beneath it. Boiling it away leaves the salt behind."],
+ [STONE,"Stone","Solids",K_SOLID,2700,[110,113,117],18,20,.05,"Inert rock, about 2.7 g/cm³ for granite. Sustained lava heat slowly remelts it and acid eats it."],
+ [WOOD,"Wood","Solids",K_SOLID,700,[120,77,44],16,20,.04,"Catches at around 300 °C and burns for a long time, giving off flame and smoke and leaving ash."],
+ [PLANT,"Plant","Solids",K_SOLID,900,[66,152,72],22,20,.05,"Grows into neighbouring water, drinking it as it spreads. Its leaves catch fire easily."],
+ [FIRE,"Fire","Energy",K_FIRE,.3,[255,150,40],0,850,.2,"Rises, heats its surroundings and ignites anything flammable it touches. Water puts it out as steam."],
+ [SMOKE,"Smoke","Gases",K_GAS,.9,[80,80,82],0,90,.08,"Hot combustion products that rise, drift and thin out. Burning oil makes it dark and heavy."],
+ [STEAM,"Steam","Gases",K_GAS,.6,[196,210,222],12,110,.08,"Water vapour. It cools as it rises and condenses back into droplets, fastest near the ceiling and on ice."],
+ [LAVA,"Lava","Liquids",K_LIQUID,2600,[236,90,24],28,1150,.10,"Basaltic lava erupts at about 1100 to 1200 °C. Quenched by water it freezes to basalt and throws off steam."],
+ [BASALT,"Basalt","Powders",K_POWDER,3000,[58,54,58],10,600,.05,"Dark volcanic rock, about 3.0 g/cm³, formed when lava cools quickly."],
+ [ICE,"Ice","Solids",K_SOLID,917,[172,216,236],12,-15,.10,"0.92 g/cm³, less dense than liquid water. Melts above 0 °C and slowly freezes water that touches it."],
+ [OIL,"Oil","Liquids",K_LIQUID,900,[66,48,30],8,20,.06,"About 0.9 g/cm³, so it floats on water. Burns with heavy dark smoke, and water poured on top will not smother it."],
+ [ACID,"Acid","Liquids",K_LIQUID,1050,[150,214,60],14,20,.12,"Dissolves most solids and is used up doing it. Glass resists it. With metals it releases hydrogen: Zn + 2HCl gives ZnCl₂ + H₂."],
+ [POWDER,"Gunpowder","Powders",K_POWDER,1700,[56,54,60],14,20,.04,"Black powder: 75% potassium nitrate, 15% charcoal, 10% sulfur by weight. A flame or strong heat sets it off."],
+ [METAL,"Iron","Solids",K_SOLID,7870,[146,156,168],12,20,.45,"7.87 g/cm³. Conducts heat quickly and glows when hot. Acid turns it into hydrogen gas."],
+ [ASH,"Ash","Powders",K_POWDER,600,[166,160,154],16,20,.04,"The light mineral residue left after wood burns. It settles slowly."],
+ [HYDRO,"Hydrogen","Gases",K_GAS,.09,[168,140,214],10,20,.10,"The lightest gas, about 0.09 g/L. It pools under ceilings and burns in a flash, making water vapour."],
+ [GLASS,"Glass","Solids",K_SOLID,2500,[96,136,142],6,20,.05,"Soda-lime glass resists nearly every acid except hydrofluoric. Use it to build vessels."]
+];
+const NAME=[],GROUP=[],NOTE=[],RGB=[];
+const KIND=new Uint8Array(NT),DENS=new Float32Array(NT),T0=new Float32Array(NT),COND=new Float32Array(NT),MOV=new Uint8Array(NT);
+const HOLDT=new Float32Array(NT).fill(20),HOLDS=new Float32Array(NT).fill(.0015);
+for(const d of DEF){const id=d[0];NAME[id]=d[1];GROUP[id]=d[2];KIND[id]=d[3];DENS[id]=d[4];RGB[id]=d[5];T0[id]=d[7];COND[id]=d[8];NOTE[id]=d[9];
+  MOV[id]=(d[3]===K_EMPTY||d[3]===K_LIQUID||d[3]===K_GAS||d[3]===K_FIRE)?1:0;}
+HOLDS[EMPTY]=.012;HOLDS[SMOKE]=HOLDS[HYDRO]=.012;HOLDS[STEAM]=.004;
+HOLDT[FIRE]=850;HOLDS[FIRE]=.5;HOLDT[LAVA]=1150;HOLDS[LAVA]=.05;HOLDT[ICE]=-15;HOLDS[ICE]=.03;
+const VAR=DEF.map(d=>d[6]);
+
+// ---------- grid ----------
+const phone=matchMedia("(max-width: 600px)").matches;
+const W=phone?160:320,H=phone?220:200,NC=W*H;
+let T=new Uint8Array(NC),L=new Uint8Array(NC),N=new Uint8Array(NC),S=new Uint8Array(NC);
+let HT=new Float32Array(NC),HT2=new Float32Array(NC);
+let clock=1,tickN=0;
+let seed=0x9e3779b9;
+const rnd=()=>{seed^=seed<<13;seed^=seed>>>17;seed^=seed<<5;return seed>>>0;};
+const rf=()=>rnd()/4294967296;
+const DX=[1,-1,0,0],DY=[0,0,1,-1];
+
+function lifeFor(t){
+  if(t===FIRE)return 18+(rnd()%30);
+  if(t===SMOKE)return 70+(rnd()%120);
+  if(t===PLANT)return 40;
+  return 0;
+}
+function setc(i,t){T[i]=t;L[i]=lifeFor(t);N[i]=t===SMOKE?110+(rnd()%145):rnd()&255;HT[i]=T0[t];S[i]=clock;}
+function swap(a,b){
+  let v=T[a];T[a]=T[b];T[b]=v;v=L[a];L[a]=L[b];L[b]=v;v=N[a];N[a]=N[b];N[b]=v;
+  const h=HT[a];HT[a]=HT[b];HT[b]=h;S[a]=S[b]=clock;
+}
+const sinks=(t,j)=>{const u=T[j];return MOV[u]===1&&DENS[u]<DENS[t];};
+const rises=(t,j)=>{const u=T[j];return MOV[u]===1&&DENS[u]>DENS[t];};
+
+// ---------- reactions (numbered; 29 in total) ----------
+let jolt=0;
+function ignite(i){
+  const t=T[i];
+  if(t===WOOD){if(L[i]===0)L[i]=150+(rnd()%100);}           // R5 wood starts burning
+  else if(t===OIL){if(L[i]===0)L[i]=40+(rnd()%50);}          // R7 oil starts burning
+  else if(t===PLANT){setc(i,FIRE);L[i]=10+(rnd()%14);}       // R6 plant flashes to flame
+  else if(t===POWDER){explode(i%W,(i/W)|0);}                 // R8 gunpowder blast
+  else if(t===HYDRO){setc(i,rf()<.35?STEAM:FIRE);if(T[i]===FIRE)L[i]=6+(rnd()%8);} // R9 hydrogen burns to water vapour
+  else if(t===ICE){setc(i,WATER);}                           // R11 ice melts in flame
+}
+function explode(cx,cy){
+  const R=phone?6:8,R2=R*R;
+  T[cy*W+cx]=FIRE;L[cy*W+cx]=10;
+  for(let dy=-R;dy<=R;dy++){const y=cy+dy;if(y<0||y>=H)continue;
+    for(let dx=-R;dx<=R;dx++){const x=cx+dx;if(x<0||x>=W)continue;const d2=dx*dx+dy*dy;if(d2>R2)continue;
+      const i=y*W+x,t=T[i];
+      HT[i]+=420;
+      if(t===POWDER){T[i]=FIRE;L[i]=8+(rnd()%10);N[i]=rnd()&255;S[i]=clock;continue;}
+      if(t===STONE||t===METAL||t===GLASS||t===BASALT&&d2>R2*.4)continue;
+      if(t===WOOD||t===OIL||t===PLANT||t===HYDRO){ignite(i);}
+      if(t!==EMPTY&&(KIND[t]===K_POWDER||KIND[t]===K_LIQUID||t===ICE||t===PLANT||t===WOOD&&d2<R2*.3)){
+        // throw the particle outward along its ray to the first free cell beyond the blast radius
+        const d=Math.sqrt(d2)||1,ux=dx/d,uy=dy/d,reach=R+1+rf()*7;
+        for(let s=reach;s<reach+8;s+=1){
+          const tx=(cx+ux*s)|0,ty=(cy+uy*s-2)|0;
+          if(tx<0||tx>=W||ty<0||ty>=H)break;
+          const j=ty*W+tx;
+          if(T[j]===EMPTY){T[j]=t;L[j]=L[i];N[j]=N[i];HT[j]=HT[i];S[j]=clock;T[i]=EMPTY;L[i]=0;break;}
+        }
+      }
+      if(T[i]===EMPTY&&d2<R2*.55){T[i]=FIRE;L[i]=6+(rnd()%14);N[i]=rnd()&255;HT[i]=900;S[i]=clock;}
+      else if(T[i]===EMPTY&&rf()<.3){T[i]=SMOKE;L[i]=60+(rnd()%80);N[i]=40+(rnd()%60);S[i]=clock;}
+    }
+  }
+  jolt=1;
+}
+function nb(i,x,y){ // random 4-neighbour index or -1
+  const k=rnd()&3,nx=x+DX[k],ny=y+DY[k];
+  return nx<0||nx>=W||ny<0||ny>=H?-1:ny*W+nx;
+}
+
+function powder(i,x,y,t,slide){
+  if(y+1>=H)return;
+  const j=i+W;
+  if(sinks(t,j)){swap(i,j);return;}
+  if(rf()<slide){
+    let d=(rnd()&1)?1:-1;
+    for(let a=0;a<2;a++,d=-d){const nx=x+d;if(nx<0||nx>=W)continue;if(sinks(t,j+d)&&MOV[T[i+d]]){swap(i,j+d);return;}}
+  }
+}
+function liquid(i,x,y,t,spread){
+  if(y+1<H){
+    const j=i+W;
+    if(sinks(t,j)){swap(i,j);return;}
+    let d=(rnd()&1)?1:-1;
+    for(let a=0;a<2;a++,d=-d){const nx=x+d;if(nx<0||nx>=W)continue;if(sinks(t,j+d)){swap(i,j+d);return;}}
+  }
+  let d=(rnd()&1)?1:-1;
+  for(let a=0;a<2;a++,d=-d){
+    let best=-1;
+    for(let s=1;s<=spread;s++){const nx=x+d*s;if(nx<0||nx>=W)break;const jj=i+d*s;if(sinks(t,jj))best=jj;else break;}
+    if(best>=0){swap(i,best);return;}
+  }
+}
+function gas(i,x,y,t,up){
+  if(rf()<up&&y>0){
+    const j=i-W;
+    if(rises(t,j)){swap(i,j);return;}
+    const d=(rnd()&1)?1:-1,nx=x+d;
+    if(nx>=0&&nx<W&&rises(t,j+d)){swap(i,j+d);return;}
+  }
+  const d=(rnd()&1)?1:-1,nx=x+d;
+  if(nx>=0&&nx<W&&rises(t,i+d))swap(i,i+d);
+}
+
+function update(i,x,y,t){
+  const h=HT[i];
+  switch(t){
+  case SAND:powder(i,x,y,t,.9);return;
+  case WETSAND:
+    if(h>100&&rf()<.05){T[i]=SAND;return;}                       // R15 wet sand dries
+    powder(i,x,y,t,.06);return;
+  case BASALT:
+    if(h>1100&&rf()<.003){setc(i,LAVA);return;}                  // R27 remelt
+    powder(i,x,y,t,.25);return;
+  case ASH:if(rf()<.55)powder(i,x,y,t,.7);return;
+  case POWDER:
+    if(h>300){explode(x,y);return;}                              // R29 heat ignition (gunpowder)
+    powder(i,x,y,t,.85);return;
+  case SALT:{
+    const j=nb(i,x,y);
+    if(j>=0){
+      if(T[j]===WATER&&rf()<.06){setc(j,SALTWATER);T[i]=EMPTY;return;} // R12 salt dissolves to brine
+      if(T[j]===ICE&&rf()<.02){setc(j,WATER);}                   // R13 salt melts ice
+    }
+    powder(i,x,y,t,.8);return;}
+  case WATER:{
+    if(h>100&&rf()<.2){setc(i,STEAM);return;}                    // R16 boiling
+    const j=nb(i,x,y);
+    if(j>=0&&T[j]===SAND&&rf()<.012){T[j]=WETSAND;T[i]=EMPTY;return;} // R14 sand soaks up water
+    liquid(i,x,y,t,5);return;}
+  case SALTWATER:
+    if(h>102&&rf()<.15){if(rf()<.4)setc(i,SALT);else setc(i,STEAM);return;} // R17 brine boils off, leaving salt
+    liquid(i,x,y,t,4);return;
+  case OIL:
+    if(L[i]>0){
+      HT[i]=Math.max(h,420);
+      if(--L[i]===0){setc(i,SMOKE);N[i]=rnd()%40;return;}
+      if(y>0){const u=i-W;if(T[u]===EMPTY){if(rf()<.5)setc(u,FIRE);else if(rf()<.12){setc(u,SMOKE);N[u]=rnd()%40;}}}
+      const j=nb(i,x,y);if(j>=0&&T[j]===OIL&&rf()<.25)ignite(j);
+    }else if(h>220&&rf()<.2){ignite(i);}                         // R29 heat ignition (oil)
+    liquid(i,x,y,t,3);return;
+  case ACID:{
+    const j=nb(i,x,y);
+    if(j>=0){const u=T[j];
+      if(u===METAL){if(rf()<.006){setc(j,HYDRO);if(rf()<.25){T[i]=EMPTY;return;}}} // R23 acid + metal gives hydrogen
+      else if(u===SAND||u===WETSAND||u===SALT||u===STONE||u===WOOD||u===PLANT||u===BASALT||u===ICE||u===POWDER||u===ASH){
+        if(rf()<.08){if(rf()<.2)setc(j,SMOKE);else T[j]=EMPTY;if(rf()<.35){T[i]=EMPTY;return;}} // R24 acid dissolves solids, used up
+      }else if(u===WATER&&rf()<.002){setc(i,WATER);return;}        // R25 dilution
+    }
+    liquid(i,x,y,t,3);return;}
+  case LAVA:{
+    if(h<520&&rf()<.02){setc(i,BASALT);HT[i]=h;return;}          // R26 lava cools to basalt
+    const j=nb(i,x,y);
+    if(j>=0){const u=T[j];
+      if((u===WATER||u===SALTWATER)&&rf()<.5){setc(j,STEAM);HT[j]=130;setc(i,BASALT);return;} // R1,R2 quench
+      if(u===ICE&&rf()<.3){setc(j,WATER);setc(i,BASALT);return;} // R3 lava meets ice
+      if(u===WOOD||u===OIL||u===PLANT||u===POWDER||u===HYDRO){ignite(j);} // R4 lava ignites
+      if(u===EMPTY&&rf()<.0015&&y>0&&T[i-W]===EMPTY){setc(i-W,FIRE);L[i-W]=6;}
+    }
+    if(rf()<.6)liquid(i,x,y,t,2);return;}
+  case STONE:if(h>1100&&rf()<.0008)setc(i,LAVA);return;          // R27 remelt
+  case ICE:{
+    if(h>1&&rf()<.05){setc(i,WATER);HT[i]=2;return;}             // R21 ice melts
+    const j=nb(i,x,y);
+    if(j>=0&&T[j]===WATER&&h<-2&&rf()<.004){setc(j,ICE);HT[j]=-4;} // R20 water freezes onto ice
+    return;}
+  case WOOD:
+    if(L[i]>0){
+      HT[i]=Math.max(h,700);
+      if(--L[i]===0){if(rf()<.6)setc(i,ASH);else setc(i,FIRE);return;}
+      const j=nb(i,x,y);
+      if(j>=0){const u=T[j];
+        if(u===EMPTY&&rf()<.3)setc(j,FIRE);
+        else if((u===WATER||u===SALTWATER)&&rf()<.3){setc(j,STEAM);L[i]=0;HT[i]=90;return;} // R28 doused
+        else if(u===WOOD&&rf()<.01)ignite(j);
+      }
+      if(y>0&&T[i-W]===EMPTY&&rf()<.03)setc(i-W,SMOKE);
+    }else if(h>300&&rf()<.1)ignite(i);                           // R29 heat ignition (wood)
+    return;
+  case PLANT:{
+    if(h>180&&rf()<.2){ignite(i);return;}                        // R29 heat ignition (plant)
+    if(L[i]>0&&rf()<.03){const j=nb(i,x,y);if(j>=0&&T[j]===WATER){setc(j,PLANT);L[j]=L[i]-1;L[i]=0;}} // R22 plant grows into water
+    return;}
+  case FIRE:{
+    if(--L[i]===0||L[i]>200){if(rf()<.25)setc(i,SMOKE);else T[i]=EMPTY;return;}
+    const j=nb(i,x,y);
+    if(j>=0){const u=T[j];
+      if(u===WATER||u===SALTWATER){if(rf()<.5)setc(j,STEAM);T[i]=EMPTY;return;} // R10 water quenches flame
+      if(u===ICE){setc(j,WATER);T[i]=EMPTY;return;}              // R11
+      if(u===OIL&&rf()<.4)ignite(j);
+      else if(u===WOOD&&rf()<.04)ignite(j);
+      else if(u===PLANT&&rf()<.15)ignite(j);
+      else if(u===POWDER||u===HYDRO)ignite(j);
+    }
+    if(T[i]===FIRE)gas(i,x,y,t,.6);
+    return;}
+  case SMOKE:
+    if(--L[i]===0||(y===0&&rf()<.1)){T[i]=EMPTY;return;}
+    gas(i,x,y,t,.55);return;
+  case STEAM:{
+    if((h<35&&rf()<.004)||(y<H*.1&&rf()<.002)){setc(i,WATER);HT[i]=40;return;} // R18 condensation
+    const j=nb(i,x,y);
+    if(j>=0&&T[j]===ICE&&rf()<.08){setc(i,WATER);HT[i]=5;return;} // R19 condenses on ice
+    gas(i,x,y,t,.7);return;}
+  case HYDRO:
+    if(h>500){ignite(i);return;}                                 // R29 heat ignition (hydrogen)
+    gas(i,x,y,t,.85);return;
+  }
+}
+
+function heat(){
+  for(let y=0;y<H;y++){
+    const row=y*W;
+    for(let x=0;x<W;x++){
+      const i=row+x,t=T[i];let v=HT[i];
+      const c=COND[t];
+      const a=x>0?HT[i-1]:v,b=x<W-1?HT[i+1]:v,u=y>0?HT[i-W]:v,d=y<H-1?HT[i+W]:v;
+      v+=c*((a+b+u+d)*.25-v);
+      v+=(HOLDT[t]-v)*HOLDS[t];
+      HT2[i]=v;
+    }
+  }
+  const tmp=HT;HT=HT2;HT2=tmp;
+}
+
+const vents=[]; // [cellIndex, type, chance, cells left] fed each tick by the active scene
+function tick(){
+  clock=clock===1?2:1;tickN++;
+  const flowing=tickN%900<400; // lava and drip vents run in bursts so the bench never fills up
+  for(const v of vents)if((flowing||v[1]===FIRE)&&v[3]>0&&T[v[0]]===EMPTY&&rf()<v[2]){setc(v[0],v[1]);v[3]--;}
+  for(let y=H-1;y>=0;y--){
+    const ltr=((y+tickN)&1)===0,row=y*W;
+    for(let k=0;k<W;k++){
+      const x=ltr?k:W-1-k,i=row+x,t=T[i];
+      if(t===EMPTY||S[i]===clock)continue;
+      update(i,x,y,t);
+    }
+  }
+  heat();
+}
+
+// ---------- rendering ----------
+const cv=document.getElementById("sim");
+cv.width=W;cv.height=H; // backing store at grid resolution on purpose: one texel per cell, scaled crisp by CSS
+cv.style.aspectRatio=W+" / "+H;
+const ctx=cv.getContext("2d",{alpha:false});
+const img=ctx.createImageData(W,H),buf=new Uint32Array(img.data.buffer);
+const pack=(r,g,b)=>(255<<24|(Math.max(0,Math.min(255,b|0))<<16)|(Math.max(0,Math.min(255,g|0))<<8)|Math.max(0,Math.min(255,r|0)))>>>0;
+const LUT=new Uint32Array(NT*16);
+for(let t=1;t<NT;t++)for(let n=0;n<16;n++){
+  const f=(n-7.5)/7.5*VAR[t],c=RGB[t];
+  if(t===SMOKE){const g=26+n*7;LUT[t*16+n]=pack(g,g+2,g+5);}
+  else LUT[t*16+n]=pack(c[0]+f,c[1]+f*.9,c[2]+f*.8);
+}
+const BG=new Uint32Array(H*4);
+for(let y=0;y<H;y++)for(let n=0;n<4;n++){const k=y/H;BG[y*4+n]=pack(10+k*6+n,17+k*8+n,20+k*7+n);}
+const FIREC=new Uint32Array(48);
+for(let k=0;k<48;k++){const s=k/47;FIREC[k]=pack(150+105*Math.min(1,s*1.6),30+210*s*s,10+150*Math.pow(s,3));}
+const HEATC=new Uint32Array(256),HEATD=new Uint32Array(256);
+for(let k=0;k<256;k++){ // -40 °C .. 1240 °C in 5 °C steps
+  const tc=-40+k*5;let r,g,b;
+  if(tc<20){const s=(20-tc)/60;r=46-26*s;g=54+60*s;b=66+170*s;}
+  else{const s=Math.min(1,(tc-20)/1200);r=46+209*Math.min(1,s*2.2);g=54-34*Math.min(1,s*3)+215*Math.max(0,s-.35)*1.6;b=66-36*Math.min(1,s*3)+190*Math.max(0,s-.75)*4;}
+  HEATC[k]=pack(r,g,b);HEATD[k]=pack(r*.55,g*.55,b*.55); // air drawn dimmer than matter
+}
+let heatView=false;
+const hover={on:false,x:0,y:0};
+function render(){
+  const flick=tickN;
+  for(let i=0,y=0;y<H;y++){
+    for(let x=0;x<W;x++,i++){
+      const t=T[i];
+      if(heatView){let k=((HT[i]+40)/5)|0;k=k<0?0:k>255?255:k;buf[i]=t===EMPTY?HEATD[k]:HEATC[k];continue;}
+      if(t===EMPTY){buf[i]=BG[y*4+(N[i]&3)];continue;}
+      if(t===FIRE){let k=L[i]+(rnd()&7);buf[i]=FIREC[k>47?47:k];continue;}
+      if(t===LAVA){buf[i]=LUT[t*16+((N[i]+((flick+x*3+y)>>3))&15)];continue;}
+      let c=LUT[t*16+(N[i]>>4)];
+      const h=HT[i];
+      if((t===WOOD||t===OIL)&&L[i]>0){c=FIREC[18+(rnd()&15)];}
+      else if(h>420&&(t===METAL||t===STONE||t===BASALT||t===GLASS||t===SAND)){
+        const g=Math.min(1,(h-420)/700),r0=c&255,g0=(c>>8)&255,b0=(c>>16)&255;
+        c=pack(r0+(255-r0)*g,g0+(110-g0)*g*.8,b0+(40-b0)*g);
+      }
+      buf[i]=c;
+    }
+  }
+  if(hover.on){ // brush outline
+    const r=brush,cx=hover.x,cy=hover.y,steps=Math.max(12,r*8);
+    for(let s=0;s<steps;s++){const a=s/steps*6.2832,x=Math.round(cx+Math.cos(a)*r),y=Math.round(cy+Math.sin(a)*r);
+      if(x>=0&&x<W&&y>=0&&y<H)buf[y*W+x]=0xffc8e6f0;}
+  }
+  ctx.putImageData(img,0,0);
+}
+
+// ---------- scenes (all coordinates are fractions of the grid) ----------
+function clearAll(){T.fill(0);L.fill(0);S.fill(0);HT.fill(20);HT2.fill(20);for(let i=0;i<NC;i++)N[i]=rnd()&255;tickN=0;vents.length=0;}
+function put(x,y,t){x|=0;y|=0;if(x<0||x>=W||y<0||y>=H)return;setc(y*W+x,t);}
+function rect(x0,y0,x1,y1,t){for(let y=Math.round(y0*H);y<Math.round(y1*H);y++)for(let x=Math.round(x0*W);x<Math.round(x1*W);x++)put(x,y,t);}
+function disc(cx,cy,r,t){const X=cx*W,Y=cy*H;for(let y=Math.floor(Y-r);y<=Y+r;y++)for(let x=Math.floor(X-r);x<=X+r;x++)if((x-X)**2+(y-Y)**2<=r*r)put(x,y,t);}
+const M=()=>Math.min(W,H);
+const SCENES={
+  volcano(){
+    rect(0,.64,1,1,WATER);
+    for(let x=0;x<W;x++){const bed=H*(.9+.035*Math.sin(x*.07));for(let y=bed|0;y<H;y++)put(x,y,SAND);}
+    const cx=W*.5,peak=H*.3,base=H*.93,hw=W*(phone?.34:.3);
+    for(let x=0;x<W;x++){
+      const d=Math.abs(x-cx)/hw;if(d>=1)continue;
+      const top=Math.round(peak+(base-peak)*Math.pow(d,1.25)+Math.sin(x*.4)*1.2);
+      for(let y=top;y<H;y++)put(x,y,y<top+3?(top>H*.6?SAND:BASALT):STONE);
+      if(top>H*.6&&top<H*.86&&x%3!==0)put(x,top-1,PLANT);
+    }
+    const pw=Math.max(2,W*.018);
+    for(let y=peak-1;y<H*.82;y++)for(let x=cx-pw;x<=cx+pw;x++)put(x,y,LAVA);
+    for(let y=peak-M()*.13;y<peak;y++)for(let x=cx-W*.05;x<=cx+W*.05;x++)put(x,y,LAVA);
+    for(let x=cx-pw;x<=cx+pw;x++)vents.push([Math.round(peak-2)*W+Math.round(x),LAVA,.35,500]);
+  },
+  refinery(){
+    rect(0,.93,1,1,STONE);
+    rect(.34,.68,.36,.93,STONE);
+    rect(0,.78,.34,.93,WATER);
+    rect(0,.72,.34,.78,OIL);
+    const tank=(x0,x1,y0,fill)=>{rect(x0,y0,x1,.93,METAL);rect(x0+2/W,y0,x1-2/W,.93,EMPTY);rect(x0+2/W,fill,x1-2/W,.93,OIL);};
+    tank(.42,.56,.42,.5);tank(.62,.76,.55,.6);
+    rect(.56,.62,.58,.635,METAL);
+    for(const px of [.82,.95])rect(px,.55,px+.012,.93,WOOD);
+    rect(.8,.55,.98,.57,WOOD);rect(.8,.74,.98,.76,WOOD);
+    rect(.84,.5,.93,.55,POWDER);
+    for(let y=Math.round(.72*H);y<Math.round(.74*H);y++)for(let x=Math.round(.03*W);x<Math.round(.24*W);x++){const i=y*W+x;if(T[i]===OIL)ignite(i);}
+    for(let x=Math.round(.44*W);x<Math.round(.5*W);x++){const i=Math.round(.5*H)*W+x;if(T[i]===OIL)ignite(i);}
+  },
+  cave(){
+    for(let y=0;y<H;y++)for(let x=0;x<W;x++){
+      const dx=(x-W*.5)/(W*.47),dy=(y-H*.5)/(H*.42),r=1+.06*Math.sin(x*.15)+.05*Math.sin(y*.21);
+      put(x,y,dx*dx+dy*dy<r*r?EMPTY:STONE);
+    }
+    for(let x=0;x<W;x++){
+      let y=0;while(y<H&&T[y*W+x]!==EMPTY)y++;if(y>=H*.6)continue;
+      const len=4+((x%7===0)?6+(rnd()%14):(rnd()%3));
+      for(let k=0;k<len;k++)put(x,y+k,ICE);
+    }
+    rect(.34,.66,.39,1,STONE);
+    for(let y=Math.round(H*.74);y<H;y++)for(let x=0;x<W;x++)if(T[y*W+x]===EMPTY)put(x,y,x<W*.36?LAVA:WATER);
+    rect(.55,.72,.68,.78,ICE);
+    for(const fx of [.16,.24]){const x=Math.round(fx*W);let y=0;while(y<H&&T[y*W+x]!==EMPTY)y++;if(y<H)vents.push([y*W+x,WATER,.12,400]);} // meltwater drips onto the lava
+    rect(.74,.58,.82,.64,SALT);
+  },
+  empty(){},
+  flask(){
+    rect(0,.94,1,1,STONE);
+    rect(.04,.88,.96,.91,WOOD);rect(.08,.91,.1,.94,WOOD);rect(.9,.91,.92,.94,WOOD);
+    const cx=W*.32,R=M()*.17,cy=H*.88-R-1,nh=Math.max(3,W*.028);
+    for(let y=0;y<H;y++)for(let x=0;x<W;x++){
+      const d=Math.hypot(x-cx,y-cy);
+      if(d<=R&&d>R-2.2&&!(Math.abs(x-cx)<nh&&y<cy))put(x,y,GLASS);
+      else if(d<=R-2.2&&y>cy-R*.25)put(x,y,ACID);
+    }
+    for(let y=Math.round(H*.3);y<cy-R+3;y++){put(cx-nh-1,y,GLASS);put(cx-nh,y,GLASS);put(cx+nh,y,GLASS);put(cx+nh+1,y,GLASS);}
+    for(let y=cy+R-9;y<cy+R-3;y++)for(let x=cx-W*.04;x<cx+W*.04;x++)put(x,y,METAL);
+    for(let x=cx-W*.08;x<cx+W*.08;x++){put(x,H*.12,METAL);vents.push([(Math.round(H*.12)-1)*W+Math.round(x),FIRE,.4,Infinity]);}
+    const bx0=W*.6,bx1=W*.84,by0=H*.58,by1=H*.88;
+    for(let y=by0;y<by1;y++){put(bx0,y,GLASS);put(bx0+1,y,GLASS);put(bx1,y,GLASS);put(bx1+1,y,GLASS);}
+    for(let x=bx0;x<=bx1+1;x++){put(x,by1-1,GLASS);put(x,by1-2,GLASS);}
+    for(let y=H*.68;y<by1-2;y++)for(let x=bx0+2;x<bx1;x++)put(x,y,WATER);
+    rect(.69,.62,.74,.66,ICE);
+    rect(.66,.2,.76,.3,SALT);
+  }
+};
+let sceneName="volcano";
+function loadScene(name,pre){sceneName=name;clearAll();SCENES[name]();for(let k=0;k<pre;k++)tick();render();}
+
+// ---------- palette ----------
+const ORDER={Solids:[STONE,METAL,GLASS,WOOD,PLANT,ICE],Powders:[SAND,WETSAND,SALT,POWDER,BASALT,ASH],Liquids:[WATER,SALTWATER,OIL,ACID,LAVA],Gases:[STEAM,SMOKE,HYDRO],Energy:[FIRE,EMPTY]};
+let current=SAND;
+const pal=document.getElementById("palette"),note=document.getElementById("note");
+const css=t=>t===FIRE?"linear-gradient(#ffe08a,#e9713f 60%,#a8281c)":t===EMPTY?"repeating-linear-gradient(45deg,var(--line) 0 3px,var(--ink) 3px 6px)":t===SMOKE?"#4b4e52":`rgb(${RGB[t].join(",")})`;
+for(const g in ORDER){
+  const sec=document.createElement("div");sec.className="grp";sec.setAttribute("role","group");sec.setAttribute("aria-labelledby","g-"+g);
+  sec.innerHTML=`<h2 id="g-${g}">${g}</h2>`;
+  const box=document.createElement("div");box.className="swatches";
+  for(const t of ORDER[g]){
+    const b=document.createElement("button");b.type="button";b.className="sw";b.id="el-"+NAME[t].toLowerCase().replace(/\s+/g,"-");
+    b.dataset.t=t;b.setAttribute("aria-pressed","false");
+    b.innerHTML=`<i style="background:${css(t)}"></i><span>${NAME[t]}</span>`;
+    b.addEventListener("click",()=>choose(t));
+    box.appendChild(b);
+  }
+  sec.appendChild(box);pal.appendChild(sec);
+}
+function choose(t){
+  current=t;
+  for(const b of pal.querySelectorAll(".sw"))b.setAttribute("aria-pressed",String(+b.dataset.t===t));
+  note.innerHTML=`<strong>${NAME[t]}</strong>${NOTE[t]}`;
+}
+choose(SAND);
+
+// ---------- controls ----------
+const $=id=>document.getElementById(id);
+const reduced=matchMedia("(prefers-reduced-motion: reduce)").matches;
+let paused=reduced,brush=phone?3:4;
+const brushEl=$("brush"),brushOut=$("brushOut"),sprayEl=$("spray"),btnPause=$("btnPause"),btnHeat=$("btnHeat"),sceneEl=$("scene");
+brushEl.value=brush;brushOut.textContent=brush;
+function setPaused(p){paused=p;btnPause.setAttribute("aria-pressed",String(p));btnPause.textContent=p?"Resume":"Pause";}
+setPaused(paused);
+btnPause.addEventListener("click",()=>setPaused(!paused));
+$("btnStep").addEventListener("click",()=>{setPaused(true);tick();render();readout(true);});
+$("btnClear").addEventListener("click",()=>{sceneEl.value="empty";loadScene("empty",0);});
+btnHeat.addEventListener("click",()=>{heatView=!heatView;btnHeat.setAttribute("aria-pressed",String(heatView));render();});
+brushEl.addEventListener("input",()=>{brush=+brushEl.value;brushOut.textContent=brush;});
+sceneEl.addEventListener("change",()=>loadScene(sceneEl.value,40));
+addEventListener("keydown",e=>{
+  if(e.ctrlKey||e.metaKey||e.altKey)return;
+  const tag=e.target.tagName;
+  if((e.key===" "||e.key==="Enter")&&(tag==="BUTTON"||tag==="SELECT"||tag==="INPUT"))return;
+  if(tag==="SELECT"&&e.key.startsWith("Arrow"))return;
+  const k=e.key.toLowerCase();
+  if(e.key===" "){e.preventDefault();setPaused(!paused);}
+  else if(k==="."){setPaused(true);tick();render();readout(true);}
+  else if(k==="["||k==="]"){brush=Math.max(1,Math.min(18,brush+(k==="]"?1:-1)));brushEl.value=brush;brushOut.textContent=brush;}
+  else if(k==="s"){sprayEl.checked=!sprayEl.checked;}
+  else if(k==="e"){choose(EMPTY);}
+  else if(k==="h"){btnHeat.click();}
+  else if(k>="1"&&k<="4"){sceneEl.selectedIndex=+k-1;loadScene(sceneEl.value,40);}
+});
+
+// ---------- painting ----------
+const pen={down:false,erase:false,x:0,y:0,lx:0,ly:0,id:-1};
+function cellAt(e){const r=cv.getBoundingClientRect();return[Math.floor((e.clientX-r.left)/r.width*W),Math.floor((e.clientY-r.top)/r.height*H)];}
+cv.addEventListener("contextmenu",e=>e.preventDefault());
+cv.addEventListener("pointerdown",e=>{
+  e.preventDefault();
+  try{cv.setPointerCapture(e.pointerId);}catch(_){}
+  const[x,y]=cellAt(e);pen.down=true;pen.id=e.pointerId;pen.erase=e.button===2||e.shiftKey||current===EMPTY;pen.x=pen.lx=x;pen.y=pen.ly=y;
+  hover.on=e.pointerType!=="touch";hover.x=x;hover.y=y;
+  stroke();
+});
+cv.addEventListener("pointermove",e=>{
+  const[x,y]=cellAt(e);hover.x=x;hover.y=y;hover.on=e.pointerType!=="touch";
+  if(pen.down&&e.pointerId===pen.id){pen.x=x;pen.y=y;pen.erase=(e.buttons&2)!==0||e.shiftKey||current===EMPTY;stroke();}
+  readout(true);
+});
+const up=e=>{if(e.pointerId===pen.id){pen.down=false;pen.id=-1;}};
+cv.addEventListener("pointerup",up);cv.addEventListener("pointercancel",up);
+cv.addEventListener("pointerleave",e=>{if(!pen.down)hover.on=false;});
+function dab(cx,cy){
+  const r=brush,r2=r*r+r*.6,spray=sprayEl.checked,t=current,erase=pen.erase;
+  for(let dy=-r;dy<=r;dy++){const y=cy+dy;if(y<0||y>=H)continue;
+    for(let dx=-r;dx<=r;dx++){const x=cx+dx;if(x<0||x>=W||dx*dx+dy*dy>r2)continue;
+      if(spray&&rf()>.1)continue;
+      const i=y*W+x;
+      if(erase){T[i]=EMPTY;L[i]=0;HT[i]=20;continue;}
+      const u=T[i];
+      if(t===FIRE&&(u===WOOD||u===OIL||u===PLANT||u===POWDER||u===HYDRO||u===ICE)){ignite(i);continue;}
+      if(u===EMPTY||(MOV[u]&&KIND[t]===K_SOLID))setc(i,t);
+    }
+  }
+}
+function stroke(){
+  const dx=pen.x-pen.lx,dy=pen.y-pen.ly,n=Math.max(1,Math.ceil(Math.max(Math.abs(dx),Math.abs(dy))/Math.max(1,brush*.5)));
+  for(let k=1;k<=n;k++)dab(Math.round(pen.lx+dx*k/n),Math.round(pen.ly+dy*k/n));
+  pen.lx=pen.x;pen.ly=pen.y;
+}
+
+// ---------- readout ----------
+const roEl=$("roEl"),roT=$("roT"),roXY=$("roXY"),roTick=$("roTick");
+function readout(){
+  const x=Math.max(0,Math.min(W-1,hover.x)),y=Math.max(0,Math.min(H-1,hover.y)),i=y*W+x,t=T[i];
+  roEl.textContent=t===EMPTY?"Air":NAME[t]+((t===WOOD||t===OIL)&&L[i]>0?" (burning)":"");
+  roT.textContent=Math.round(HT[i])+" °C";
+  roXY.textContent="x "+x+" y "+y;
+  roTick.textContent="tick "+tickN;
+}
+
+// ---------- loop ----------
+const frame=$("frame");
+let fc=0;
+function loop(){
+  if(pen.down)stroke();
+  if(!paused){tick();tick();}
+  if(jolt){jolt=0;if(!reduced){frame.classList.remove("jolt");void frame.offsetWidth;frame.classList.add("jolt");}}
+  render();
+  if((++fc&7)===0)readout();
+  requestAnimationFrame(loop);
+}
+hover.x=W>>1;hover.y=H>>1;
+loadScene("volcano",150);
+readout();
+requestAnimationFrame(loop);
+window.__sim={T,W,H,get tick(){return tickN},NAME,count(t){let c=0;for(let i=0;i<NC;i++)if(T[i]===t)c++;return c;}};
+})();
+</script>
+</body>
+</html>
