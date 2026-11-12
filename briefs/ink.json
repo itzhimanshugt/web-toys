@@ -1,0 +1,4 @@
+{
+ "slug": "ink",
+ "brief": "INK TANK: a GPU stable-fluids simulation (Jos Stam's 1999 method: semi-Lagrangian advection, pressure projection with Jacobi iterations, plus vorticity confinement) in raw WebGL with float or half-float textures and a CPU fallback. Drag to push the fluid and inject coloured ink; several ink colours that mix like pigment (subtractive look) instead of glowing additively; draw solid obstacles the flow goes around with correct boundary handling; a marbled-paper look with paper grain. Controls: viscosity, ink dissipation, vorticity, pressure iterations (quality), ink palette, obstacle draw/erase, a flow-past-a-cylinder preset that sheds a vortex street, a smoke-rings preset, clear. Readouts: grid resolution and an approximate Reynolds-number indicator clearly labelled as approximate. The first frame already shows swirling ink."
+}

@@ -1,0 +1,4 @@
+{
+ "slug": "walkers",
+ "brief": "EVOLVING WALKERS: creatures made of point masses joined by springs and muscles (springs whose rest length oscillates with an evolved phase and amplitude) evolve to walk to the right over uneven ground. A genetic algorithm runs a population (about 40) per generation in a fast headless physics loop, with selection, crossover and mutation of body layout and muscle parameters. Show the champion of each generation walking live, a fitness-over-generations chart, a strip of past champions, and controls for mutation rate, population size, terrain roughness, gravity, and a Fast-forward 10 generations button. Physics: Verlet with ground friction, stable at a fixed dt, with no exploits like jittering through the floor. Visible improvement must happen within about a minute of use. Seed a few prebuilt creatures so the first frame shows something walking."
+}

@@ -1,0 +1,4 @@
+{
+ "slug": "sundial",
+ "brief": "SUNDIAL WORKSHOP: design an accurate horizontal sundial for any place and watch its shadow move. Compute the Sun's position with the NOAA solar position equations (declination, equation of time, hour angle, altitude, azimuth) for a chosen latitude, longitude, date and UTC offset; draw the dial's hour lines from tan(theta) = sin(phi) * tan(h), set the gnomon angle equal to the latitude, and animate the gnomon's shadow through the day (time-lapse slider and a Now button using the viewer's clock). Show the equation-of-time correction, the analemma for the location, sunrise, sunset and solar noon, and the difference between sundial time and clock time. Pick from a short list of real cities with correct coordinates or type coordinates (handle the southern hemisphere and polar day/night correctly). Brass dial with engraved Roman numerals and a motto ribbon. The first frame shows the dial on a sunny afternoon with a sharp shadow."
+}

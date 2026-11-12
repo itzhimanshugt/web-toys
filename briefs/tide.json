@@ -1,0 +1,4 @@
+{
+ "slug": "tide",
+ "brief": "TIDE MACHINE: a working model of a harmonic tide-predicting machine like the one William Thomson (Lord Kelvin) designed in 1872-73: brass pulleys and cranks, one per tidal constituent, summing their motions through a wire to a pen that draws the tide curve on a moving paper drum. Use correct constituent periods: M2 12.4206 h, S2 12.0000 h, N2 12.6583 h, K2 11.9672 h, K1 23.9345 h, O1 25.8193 h, P1 24.0659 h, and the shallow-water overtide M4 6.2103 h. Users adjust each constituent's amplitude and phase with dials, toggle constituents, and choose regime presets (semi-diurnal, diurnal, mixed, spring-neap beat); no invented port data. Show spring and neap tides emerging from the M2/S2 beat (about 14.77 days), a time axis in hours and days, and high/low water markers with times. Animated mechanism drawn on canvas with real pulley motion; speed control; the first frame shows the machine mid-run with ink already on the drum."
+}

@@ -1,0 +1,4 @@
+{
+ "slug": "marbling",
+ "brief": "SUMINAGASHI: digital paper marbling (Japanese suminagashi and Turkish ebru) using exact area-preserving marbling maps as described by Aubrey Jaffer and Shufang Lu: an ink drop of radius r at centre C moves every existing boundary point P to C + (P - C) * sqrt(1 + r^2 / |P - C|^2); tine strokes deform points with a line-tine displacement that decays with distance from the line. Represent ink films as dense polygons and refine edges adaptively so curves stay smooth. Tools: drop ink (tap; hold to grow), single tine and multi-tine comb drags with spacing, swirl; a palette of traditional marbling colours; pattern recipes that replay classic sequences (stone, combed, chevron), described plainly without claiming exact historical recipes. Render with soft paper texture and slight ink edge darkening. Undo, clear, a layer count readout. The first frame shows a finished marbled sheet."
+}

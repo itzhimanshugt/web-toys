@@ -1,0 +1,4 @@
+{
+ "slug": "aurora",
+ "brief": "AURORA ENGINE: a real-time aurora borealis simulator over a procedurally generated arctic landscape at night (WebGL fragment shader; layered curtains via 3D-noise raymarching or stacked ribbons; stars; reflections on a frozen lake). Physics-grounded controls: Kp index 0-9 (the real NOAA scale) moves the auroral oval equatorward and raises intensity and activity; solar wind speed (km/s) drives curtain motion; an IMF Bz north/south toggle (southward Bz triggers substorm brightening with fast-moving rays). Emission colours tied to real lines: atomic oxygen 557.7 nm green at roughly 100-200 km altitude, oxygen 630.0 nm red above about 200 km, molecular nitrogen blue/purple at the lower fringe; show an altitude/emission legend. Camera: drag to look around the sky; time-lapse speed; a Substorm button. Readouts: Kp, approximate oval geomagnetic latitude, wavelengths. Gorgeous first frame; a lighter Canvas fallback if WebGL is missing."
+}

@@ -1,0 +1,4 @@
+{
+ "slug": "logic",
+ "brief": "LOGIC BENCH: a digital logic breadboard. Place components on a grid (toggle switch, push button, clock with adjustable Hz, AND, OR, NOT, NAND, NOR, XOR, LED, 7-segment display, D flip-flop), wire them by dragging from an output pin to an input pin, and watch signals propagate as animated pulses along wires (high = lit). Event-driven simulation with small gate delays so latches and oscillators behave realistically. Ship 6 labelled example circuits to load and play with: half adder, full adder, SR latch from NANDs, 4-bit ripple counter driving LEDs, ring oscillator, binary-to-7-segment decoder. Move, rotate and delete parts; undo; a truth-table panel for the selected gate; save the current circuit to localStorage (try/catch). Clean schematic look with distinctive-shape (ANSI/IEEE) gate symbols drawn on canvas or SVG. The first frame shows the 4-bit counter already ticking."
+}

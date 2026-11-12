@@ -1,0 +1,4 @@
+{
+ "slug": "optics",
+ "brief": "LIGHT BENCH: a 2D ray-optics sandbox. Drag in light sources (laser, point source, parallel beam, white light) and optical elements: convex and concave lenses, flat and curved mirrors, prisms, glass blocks, a curved fibre, a water droplet. Trace rays with Snell's law, Fresnel partial reflection (weighted ray intensity), total internal reflection, and wavelength-dependent refraction from a Cauchy model of crown glass (n about 1.5046 + 4200 nm^2 / lambda^2) so white light disperses into a spectrum; a rainbow preset in a droplet shows the primary bow near 42 degrees. Elements are draggable, rotatable and resizable with handles; a refractive index slider per element; readouts for focal length (lensmaker's equation) and angles. Additive light rendering on a dark optical table with a millimetre grid. Presets: camera lens, periscope, fibre optic, Newton's prism, rainbow. The first frame shows white light splitting through a prism."
+}

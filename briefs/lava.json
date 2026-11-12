@@ -1,0 +1,4 @@
+{
+ "slug": "lava",
+ "brief": "LAVA LAMP: a wax-in-liquid convection lamp. Simulate blobs of wax as particles with temperature: heated by the bulb at the bottom they expand, become less dense than the liquid and rise; cooled near the top they contract and sink; they merge and split through a metaball field. Render with a GLSL metaball shader with soft inner glow, curved-glass refraction and an original bottle silhouette; the ambient light tints the room behind. Controls: bulb power (a cold start shows the wax slowly melting before it flows, as real lamps do), liquid colour, wax colour, number of blobs, time speed, shake (tap). Believable physics: buoyancy from temperature-dependent density, viscous drag. No brand names. Canvas fallback if WebGL is missing. The first frame shows a warmed lamp with blobs mid-rise."
+}

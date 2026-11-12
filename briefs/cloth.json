@@ -1,0 +1,4 @@
+{
+ "slug": "cloth",
+ "brief": "SILK LOOM: a tearable fabric simulation using Verlet integration and distance constraints (the method Thomas Jakobsen described in 'Advanced Character Physics', 2001). Materials with different stiffness, weight and tear thresholds: silk, cotton canvas, rubber sheet, chain mail. Interactions: grab and drag the fabric; cut by slashing with a Scissors tool or Shift/right-drag; pin and unpin points; wind with gusts (direction and strength); gravity toggle; a heavy ball you can drag through the cloth with collision. Render as a shaded mesh (WebGL or Canvas 2D triangles lit from estimated normals) with a woven texture and visible torn edges. Controls: material picker, constraint iterations (quality), wind, reset, presets (hanging banner, trampoline, flag on a pole). Mobile friendly. The first frame shows a hanging cloth already swaying."
+}

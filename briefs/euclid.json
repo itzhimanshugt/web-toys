@@ -1,0 +1,4 @@
+{
+ "slug": "euclid",
+ "brief": "EUCLID RINGS: a polymetric drum machine built on Euclidean rhythms (generated with Bjorklund's algorithm; Godfried Toussaint showed in 2005 that many traditional rhythms are Euclidean, e.g. E(3,8) is the Cuban tresillo and E(5,8) the cinquillo). Up to 6 concentric rings, each with its own step count (2-32), pulses, rotation and instrument; a sweeping playhead per ring; hits flash. Synthesise every drum in Web Audio from scratch (kick from a pitch-swept sine, snare from noise plus tone, hats from filtered noise, clave, tom, shaker, and a melodic bell voice on a scale), sample-accurate lookahead scheduling, swing, tempo, per-ring volume/mute/solo, master compressor. Named preset grooves using correct Euclidean patterns, labelled with their musical traditions only where accurate. A Sound on button is required. The first frame shows the rings mid-groove (visual only until sound is enabled)."
+}

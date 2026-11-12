@@ -1,0 +1,489 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>Physarum Petri Dish</title>
+<meta name="description" content="A slime mold simulation that grows networks between oat flakes you drop on the plate.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Figtree:wght@400;500;600;700&family=Instrument+Serif:ital@0;1&family=Martian+Mono:wght@400;500&display=swap">
+<style>
+/* Layout: the dish is the hero, sitting on a lab bench; a notebook of controls sits beside it and drops below on phones. */
+:root{
+  --bench:#E4E7EE; --panel:#F6F7FA; --raised:#FFFFFF; --well:#E3E7EE;
+  --ink:#181B23; --ink-soft:#3C4252; --muted:#5D6475; --line:#CBD0DB;
+  --accent-ink:#8A6200; --accent-fill:#F2C94C; --on-accent:#241A00;
+  --oat:#D6C08A; --salt:#EEF2F4;
+  --glass-hi:rgba(255,255,255,.85); --glass-lo:rgba(255,255,255,.2);
+  --shadow:rgba(28,34,52,.28); --shadow-soft:rgba(28,34,52,.12);
+  --agar:#231D12;
+  --display:"Instrument Serif","Iowan Old Style",Georgia,serif;
+  --ui:"Figtree",system-ui,-apple-system,"Segoe UI",sans-serif;
+  --mono:"Martian Mono",ui-monospace,"SF Mono",Consolas,monospace;
+}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){
+  --bench:#0E1117; --panel:#161A22; --raised:#222833; --well:#0E1117;
+  --ink:#E7E9EF; --ink-soft:#C3C8D3; --muted:#9299A9; --line:#2A303C;
+  --accent-ink:#F2C94C; --accent-fill:#F2C94C; --on-accent:#241A00;
+  --oat:#D6C08A; --salt:#EEF2F4;
+  --glass-hi:rgba(255,255,255,.22); --glass-lo:rgba(255,255,255,.03);
+  --shadow:rgba(0,0,0,.65); --shadow-soft:rgba(0,0,0,.45);
+  color-scheme:dark;
+}}
+:root[data-theme="dark"]{
+  --bench:#0E1117; --panel:#161A22; --raised:#222833; --well:#0E1117;
+  --ink:#E7E9EF; --ink-soft:#C3C8D3; --muted:#9299A9; --line:#2A303C;
+  --accent-ink:#F2C94C; --accent-fill:#F2C94C; --on-accent:#241A00;
+  --oat:#D6C08A; --salt:#EEF2F4;
+  --glass-hi:rgba(255,255,255,.22); --glass-lo:rgba(255,255,255,.03);
+  --shadow:rgba(0,0,0,.65); --shadow-soft:rgba(0,0,0,.45);
+  color-scheme:dark;
+}
+*{box-sizing:border-box}
+body{background:var(--bench);color:var(--ink);font-family:var(--ui);font-size:15px;line-height:1.55;-webkit-font-smoothing:antialiased;
+  padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));padding-block:0}
+.lab{max-width:1140px;margin:0 auto;padding-block:clamp(20px,4vw,52px) 64px;display:grid;grid-template-columns:minmax(0,1.15fr) minmax(0,1fr);gap:clamp(28px,4vw,60px);align-items:start}
+@media (max-width:880px){.lab{grid-template-columns:minmax(0,1fr)}}
+
+/* ---------- the plate ---------- */
+.plate{display:grid;gap:12px;justify-items:center;min-width:0;position:sticky;top:max(16px,env(safe-area-inset-top,0px))}
+@media (max-width:880px){.plate{position:static}}
+.dish{position:relative;width:100%;max-width:620px;border-radius:50%;padding:2.4%;
+  background:linear-gradient(150deg,var(--glass-hi),var(--glass-lo) 42%,var(--glass-lo) 62%,var(--glass-hi));
+  box-shadow:0 30px 60px -24px var(--shadow),0 3px 10px var(--shadow-soft),inset 0 0 0 1px var(--glass-hi)}
+.dish canvas{display:block;width:100%;height:auto;border-radius:50%;background:var(--agar);touch-action:none;cursor:crosshair}
+.glass{position:absolute;inset:2.4%;border-radius:50%;pointer-events:none;
+  background:radial-gradient(circle at 50% 50%,transparent 60%,rgba(0,0,0,.38) 100%),radial-gradient(ellipse 38% 20% at 32% 16%,rgba(255,255,255,.12),transparent 70%);
+  box-shadow:inset 0 0 0 1.5px rgba(255,255,255,.10),inset 0 0 30px rgba(0,0,0,.55)}
+.hint{position:absolute;left:50%;bottom:13%;transform:translateX(-50%);white-space:nowrap;font:500 .66rem/1 var(--mono);letter-spacing:.04em;color:#F3E3A6;background:rgba(18,14,6,.8);padding:8px 12px;border-radius:999px;pointer-events:none;transition:opacity .5s}
+.hint.gone{opacity:0}
+.platelabel,.readout{margin:0;font:400 .66rem/1.6 var(--mono);letter-spacing:.06em;color:var(--muted);text-align:center;font-variant-numeric:tabular-nums}
+.platelabel{text-transform:uppercase}
+
+/* ---------- the notebook ---------- */
+.notebook{background:var(--panel);border:1px solid var(--line);border-radius:16px;padding:clamp(20px,3vw,30px);min-width:0;display:grid}
+.eyebrow{margin:0;font-size:.7rem;font-weight:700;letter-spacing:.16em;text-transform:uppercase;color:var(--accent-ink)}
+h1{font-family:var(--display);font-weight:400;font-size:clamp(2.3rem,4.4vw,3.1rem);line-height:1;letter-spacing:-.01em;margin:.35rem 0 .7rem;text-wrap:balance}
+.lede{margin:0 0 18px;color:var(--ink-soft);font-size:1rem;max-width:46ch}
+.group{display:grid;gap:10px;padding-block:18px;border-top:1px solid var(--line)}
+.group:last-child{padding-bottom:0}
+.glabel{font-size:.68rem;font-weight:700;letter-spacing:.14em;text-transform:uppercase;color:var(--muted)}
+.help{margin:0;font-size:.85rem;color:var(--muted);min-height:2.6em}
+button{font:inherit;color:inherit}
+.seg{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:4px;background:var(--well);padding:4px;border-radius:11px;border:1px solid var(--line)}
+.segbtn{appearance:none;border:0;background:transparent;color:var(--ink-soft);font-weight:600;font-size:.9rem;padding:10px 6px;border-radius:8px;display:flex;align-items:center;justify-content:center;gap:7px;cursor:pointer;min-width:0}
+.segbtn[aria-pressed="true"]{background:var(--raised);color:var(--ink);box-shadow:0 1px 3px var(--shadow-soft),0 0 0 1px var(--line)}
+.sw{width:11px;height:11px;border-radius:50%;flex:none}
+.sw-oat{background:var(--oat);box-shadow:inset 0 0 0 1px rgba(90,70,20,.35)}
+.sw-salt{background:var(--salt);box-shadow:inset 0 0 0 1px var(--muted)}
+.sw-erase{border:1.5px dashed var(--muted)}
+kbd{font:500 .6rem/1 var(--mono);color:var(--muted);border:1px solid var(--line);border-radius:4px;padding:3px 4px}
+@media (max-width:380px){kbd{display:none}}
+.chips{display:flex;flex-wrap:wrap;gap:6px}
+.chip{appearance:none;border:1px solid var(--line);background:transparent;color:var(--ink);font-weight:500;font-size:.85rem;padding:8px 13px;border-radius:999px;cursor:pointer}
+.chip:hover{border-color:var(--muted)}
+.chip[aria-pressed="true"]{background:var(--accent-fill);color:var(--on-accent);border-color:transparent;font-weight:600}
+.sliders{display:grid;gap:12px;margin-top:4px}
+.sl{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:2px 12px;align-items:baseline}
+.sl label{font-size:.88rem;font-weight:500}
+.sl output{font:400 .7rem/1 var(--mono);color:var(--muted);font-variant-numeric:tabular-nums}
+.sl input{grid-column:1/-1;width:100%;margin:4px 0 0;accent-color:var(--accent-ink)}
+.actions{display:flex;flex-wrap:wrap;gap:8px}
+.btn{appearance:none;border:1px solid var(--line);background:var(--raised);color:var(--ink);font-weight:600;font-size:.88rem;padding:10px 15px;border-radius:10px;cursor:pointer}
+.btn:hover{border-color:var(--muted)}
+.btn.primary{background:var(--accent-fill);color:var(--on-accent);border-color:transparent;min-width:5.5em}
+.btn.primary:hover{filter:brightness(1.05)}
+button:focus-visible,input:focus-visible{outline:2px solid var(--accent-ink);outline-offset:2px}
+.how{gap:8px}
+.how h2{font-size:.95rem;font-weight:600;margin:0}
+.how p{margin:0;font-size:.88rem;color:var(--ink-soft);max-width:62ch}
+@media (prefers-reduced-motion:reduce){.hint{transition:none}}
+</style>
+<style>:root{padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}body{margin:0;font:14px -apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif}</style>
+</head>
+<body>
+<main class="lab">
+  <section class="plate" aria-label="Petri dish">
+    <div class="dish">
+      <canvas id="c" width="512" height="512" aria-label="Simulated slime mold growing across a petri dish. Click or tap to use the selected tool."></canvas>
+      <div class="glass" aria-hidden="true"></div>
+      <div class="hint" id="hint" aria-hidden="true">Tap the dish to drop an oat flake</div>
+    </div>
+    <p class="platelabel">Plate 01 · 1.5% non-nutrient agar · 512 × 512 cells</p>
+    <p class="readout" id="readout">Starting…</p>
+  </section>
+
+  <div class="notebook">
+    <header>
+      <p class="eyebrow">Specimen 01 · slime mold</p>
+      <h1><i>Physarum polycephalum</i></h1>
+      <p class="lede">A single cell with no brain that still finds short routes between food. Drop oats, wall it off with salt, and watch the network rewire itself.</p>
+    </header>
+
+    <div class="group">
+      <div class="glabel" id="tool-label">Tool</div>
+      <div class="seg" role="group" aria-labelledby="tool-label">
+        <button type="button" class="segbtn" id="tool-oat" data-tool="oat" aria-pressed="true"><span class="sw sw-oat" aria-hidden="true"></span>Oats<kbd>1</kbd></button>
+        <button type="button" class="segbtn" id="tool-salt" data-tool="salt" aria-pressed="false"><span class="sw sw-salt" aria-hidden="true"></span>Salt<kbd>2</kbd></button>
+        <button type="button" class="segbtn" id="tool-erase" data-tool="erase" aria-pressed="false"><span class="sw sw-erase" aria-hidden="true"></span>Erase<kbd>3</kbd></button>
+      </div>
+      <p class="help" id="toolhelp">Oats attract it. Tap to drop a flake, drag to lay a line of them.</p>
+    </div>
+
+    <div class="group">
+      <div class="glabel" id="beh-label">Behaviour</div>
+      <div class="chips" role="group" aria-labelledby="beh-label">
+        <button type="button" class="chip" id="p-veins" data-preset="veins" aria-pressed="true">Veins</button>
+        <button type="button" class="chip" id="p-restless" data-preset="restless" aria-pressed="false">Restless</button>
+        <button type="button" class="chip" id="p-reach" data-preset="reach" aria-pressed="false">Long reach</button>
+        <button type="button" class="chip" id="p-foam" data-preset="foam" aria-pressed="false">Foam</button>
+      </div>
+      <div class="sliders">
+        <div class="sl"><label for="sa">Sensor angle</label><output id="sa-v" for="sa">45°</output><input type="range" id="sa" min="5" max="90" step="2.5" value="45"></div>
+        <div class="sl"><label for="ra">Turn angle</label><output id="ra-v" for="ra">45°</output><input type="range" id="ra" min="5" max="90" step="2.5" value="45"></div>
+        <div class="sl"><label for="so">Sensor reach</label><output id="so-v" for="so">9 cells</output><input type="range" id="so" min="2" max="40" step="1" value="9"></div>
+        <div class="sl"><label for="decay">Trail fade</label><output id="decay-v" for="decay">10% per step</output><input type="range" id="decay" min="1" max="30" step="1" value="10"></div>
+        <div class="sl"><label for="speed">Speed</label><output id="speed-v" for="speed">2 steps per frame</output><input type="range" id="speed" min="1" max="5" step="1" value="2"></div>
+      </div>
+    </div>
+
+    <div class="group">
+      <div class="glabel">Plate</div>
+      <div class="actions">
+        <button type="button" class="btn primary" id="play">Pause</button>
+        <button type="button" class="btn" id="inoc">Re-inoculate</button>
+        <button type="button" class="btn" id="scatter">Scatter oats</button>
+        <button type="button" class="btn" id="clear">Clear plate</button>
+      </div>
+    </div>
+
+    <div class="group how">
+      <h2>How it works</h2>
+      <p>The yellow is trail laid down by <span id="count">61,277</span> particles. Each step, a particle smells the trail at three points ahead, turns toward the strongest, moves one cell and drops a little more trail. The trail spreads and fades a bit every step.</p>
+      <p>That is the whole rule. The veins, loops and constant rewiring come from many particles following it at once. This is Jeff Jones's 2010 agent model of <i>Physarum</i>.</p>
+      <p>The real organism does this with oats too. In 2010, Atsushi Tero and colleagues placed oat flakes where the cities around Tokyo sit, and the slime mold grew a network comparable to the region's rail system in efficiency, cost and fault tolerance.</p>
+    </div>
+  </div>
+</main>
+
+<script>
+(() => {
+  'use strict';
+  const N = 512, C = N / 2, R = C - 1;
+  const TAU = Math.PI * 2, D2R = Math.PI / 180;
+  const DEP = 5, FOOD = 10, SALT_SENSE = -1000;
+  const small = matchMedia('(max-width: 600px)').matches;
+  const reduce = matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+  const cv = document.getElementById('c');
+  const ctx = cv.getContext('2d');
+  const img = ctx.createImageData(N, N);
+  const out = new Uint32Array(img.data.buffer);
+
+  // grid state
+  const trail = new Float32Array(N * N), tmp = new Float32Array(N * N);
+  const inside = new Uint8Array(N * N), salt = new Uint8Array(N * N), food = new Uint8Array(N * N), grain = new Uint8Array(N * N);
+  for (let y = 0; y < N; y++) for (let x = 0; x < N; x++) {
+    const dx = x + .5 - C, dy = y + .5 - C, k = y * N + x;
+    inside[k] = dx * dx + dy * dy < R * R ? 1 : 0;
+    grain[k] = (Math.random() * 256) | 0;
+  }
+  const SAMPLE = new Int32Array(3000), sampleVals = new Float32Array(3000);
+  for (let i = 0; i < SAMPLE.length;) { const k = (Math.random() * N * N) | 0; if (inside[k]) SAMPLE[i++] = k; }
+
+  // particles: position + unit heading vector
+  const M = Math.round(Math.PI * R * R * (small ? 0.2 : 0.3));
+  const ax = new Float32Array(M), ay = new Float32Array(M), avx = new Float32Array(M), avy = new Float32Array(M);
+
+  const P = { sa: 45, ra: 45, so: 9, decay: 10, speed: small ? 1 : 2 };
+  const PRESETS = {
+    veins:    { sa: 45,   ra: 45, so: 9,  decay: 10 },
+    restless: { sa: 22.5, ra: 45, so: 9,  decay: 10 },
+    reach:    { sa: 30,   ra: 30, so: 26, decay: 6 },
+    foam:     { sa: 60,   ra: 30, so: 4,  decay: 18 }
+  };
+  let paused = reduce, stepCount = 0, scale = 20, fps = 0;
+  let foodIdx = new Int32Array(0), foodDirty = true;
+
+  // colour ramp: agar, ochre, chrome yellow, pale
+  const STOPS = [[0, 35, 29, 18], [0.22, 88, 64, 14], [0.5, 205, 150, 24], [0.78, 244, 206, 70], [1, 255, 247, 205]];
+  const pack = (r, g, b) => ((255 << 24) | (b << 16) | (g << 8) | r) >>> 0;
+  function ramp(t) {
+    for (let s = 1; s < STOPS.length; s++) {
+      const a = STOPS[s - 1], b = STOPS[s];
+      if (t <= b[0]) {
+        const f = (t - a[0]) / (b[0] - a[0]);
+        return pack((a[1] + (b[1] - a[1]) * f) | 0, (a[2] + (b[2] - a[2]) * f) | 0, (a[3] + (b[3] - a[3]) * f) | 0);
+      }
+    }
+    const l = STOPS[STOPS.length - 1];
+    return pack(l[1], l[2], l[3]);
+  }
+  const LUT = new Uint32Array(1024);
+  for (let i = 0; i < 1024; i++) LUT[i] = ramp(1 - Math.exp(-(i / 256) * 1.4));
+  const SALT_LUT = new Uint32Array(256);
+  for (let g = 0; g < 256; g++) { const f = Math.pow(g / 255, 3); SALT_LUT[g] = pack((200 + 55 * f) | 0, (210 + 45 * f) | 0, (216 + 39 * f) | 0); }
+
+  // ---------- simulation ----------
+  function sense(x, y) {
+    if (x < 0 || y < 0 || x >= N || y >= N) return -1;
+    const k = (y | 0) * N + (x | 0);
+    if (!inside[k]) return -1;
+    return salt[k] ? SALT_SENSE : trail[k];
+  }
+
+  function step() {
+    const cs = Math.cos(P.sa * D2R), ss = Math.sin(P.sa * D2R);
+    const cr = Math.cos(P.ra * D2R), sr = Math.sin(P.ra * D2R);
+    const so = P.so, t = trail;
+    for (let j = 0; j < foodIdx.length; j++) t[foodIdx[j]] += FOOD;
+    for (let i = 0; i < M; i++) {
+      const x = ax[i], y = ay[i];
+      let vx = avx[i], vy = avy[i];
+      const lx = vx * cs - vy * ss, ly = vy * cs + vx * ss;
+      const rx = vx * cs + vy * ss, ry = vy * cs - vx * ss;
+      const fc = sense(x + vx * so, y + vy * so);
+      const fl = sense(x + lx * so, y + ly * so);
+      const fr = sense(x + rx * so, y + ry * so);
+      let turn = 0;
+      if (fc > fl && fc > fr) turn = 0;
+      else if (fc < fl && fc < fr) turn = Math.random() < .5 ? 1 : -1;
+      else if (fl > fr) turn = 1;
+      else if (fr > fl) turn = -1;
+      if (turn === 1) { const nx = vx * cr - vy * sr; vy = vy * cr + vx * sr; vx = nx; }
+      else if (turn === -1) { const nx = vx * cr + vy * sr; vy = vy * cr - vx * sr; vx = nx; }
+      const m = (3 - (vx * vx + vy * vy)) * .5; vx *= m; vy *= m;
+      const nx = x + vx, ny = y + vy;
+      const k = (ny | 0) * N + (nx | 0), ck = (y | 0) * N + (x | 0);
+      if (!inside[k] || (salt[k] && !salt[ck])) {
+        const a = Math.random() * TAU; vx = Math.cos(a); vy = Math.sin(a);
+      } else {
+        ax[i] = nx; ay[i] = ny;
+        if (!salt[k]) t[k] += DEP;
+      }
+      avx[i] = vx; avy[i] = vy;
+    }
+    diffuse();
+    stepCount++;
+  }
+
+  // 3x3 mean blur (separable) plus decay
+  function diffuse() {
+    const t = trail, u = tmp, keep = (1 - P.decay / 100) / 9;
+    for (let y = 1; y < N - 1; y++) {
+      const row = y * N;
+      for (let x = 1; x < N - 1; x++) { const k = row + x; u[k] = t[k - 1] + t[k] + t[k + 1]; }
+    }
+    for (let y = 1; y < N - 1; y++) {
+      const row = y * N;
+      for (let x = 1; x < N - 1; x++) { const k = row + x; t[k] = inside[k] ? (u[k - N] + u[k] + u[k + N]) * keep : 0; }
+    }
+  }
+
+  function inoculate() {
+    trail.fill(0);
+    const r0 = R * 0.2;
+    for (let i = 0; i < M; i++) {
+      const a = Math.random() * TAU, r = Math.sqrt(Math.random()) * r0;
+      ax[i] = C + Math.cos(a) * r; ay[i] = C + Math.sin(a) * r;
+      const h = a + (Math.random() - .5) * 1.2;
+      avx[i] = Math.cos(h); avy[i] = Math.sin(h);
+    }
+    stepCount = 0;
+  }
+
+  function rebuildFood() {
+    let n = 0;
+    for (let k = 0; k < N * N; k++) if (food[k]) n++;
+    foodIdx = new Int32Array(n);
+    for (let k = 0, j = 0; k < N * N; k++) if (food[k]) foodIdx[j++] = k;
+    foodDirty = false;
+  }
+
+  function disc(cx, cy, r, fn) {
+    const r2 = r * r;
+    const x0 = Math.max(0, Math.floor(cx - r)), x1 = Math.min(N - 1, Math.ceil(cx + r));
+    const y0 = Math.max(0, Math.floor(cy - r)), y1 = Math.min(N - 1, Math.ceil(cy + r));
+    for (let y = y0; y <= y1; y++) for (let x = x0; x <= x1; x++) {
+      const dx = x + .5 - cx, dy = y + .5 - cy;
+      if (dx * dx + dy * dy <= r2) { const k = y * N + x; if (inside[k]) fn(k, dx, dy); }
+    }
+  }
+  function stampOat(cx, cy) {
+    const a = Math.random() * Math.PI, ca = Math.cos(a), sa = Math.sin(a);
+    disc(cx, cy, 7, (k, dx, dy) => {
+      const u = (dx * ca + dy * sa) / 6.5, v = (-dx * sa + dy * ca) / 4.2;
+      if (u * u + v * v <= 1) { food[k] = 1; salt[k] = 0; }
+    });
+    foodDirty = true;
+  }
+  const paintSalt = (x, y) => disc(x, y, 7, k => { salt[k] = 1; trail[k] = 0; if (food[k]) { food[k] = 0; foodDirty = true; } });
+  const eraseAt = (x, y) => disc(x, y, 11, k => { salt[k] = 0; if (food[k]) { food[k] = 0; foodDirty = true; } });
+
+  function ringOats(n, rr) {
+    const off = Math.random() * TAU;
+    for (let i = 0; i < n; i++) {
+      const a = off + i * TAU / n + (Math.random() - .5) * .35, r = rr * (.9 + Math.random() * .2);
+      stampOat(C + Math.cos(a) * r, C + Math.sin(a) * r);
+    }
+  }
+  function scatterOats(n) {
+    for (let i = 0; i < n; i++) {
+      const a = Math.random() * TAU, r = Math.sqrt(Math.random()) * R * .85;
+      stampOat(C + Math.cos(a) * r, C + Math.sin(a) * r);
+    }
+  }
+
+  // ---------- drawing ----------
+  function updateScale(force) {
+    let mx = 0;
+    for (let i = 0; i < SAMPLE.length; i++) { const v = trail[SAMPLE[i]]; sampleVals[i] = v; if (v > mx) mx = v; }
+    sampleVals.sort();
+    const target = Math.max(sampleVals[(SAMPLE.length * .985) | 0], mx * .12, 2);
+    scale = force ? target : scale + (target - scale) * .08;
+  }
+
+  function render() {
+    const inv = 256 / scale, t = trail;
+    for (let k = 0; k < N * N; k++) {
+      if (!inside[k]) { out[k] = 0; continue; }
+      if (salt[k]) { out[k] = SALT_LUT[grain[k]]; continue; }
+      let i = (t[k] * inv) | 0;
+      if (i > 1023) i = 1023; else if (i < 0) i = 0;
+      if (food[k]) {
+        // oat flakes turn yellow as the plasmodium covers them
+        const g = grain[k] / 255, cov = Math.min(1, i / 900) * .7;
+        const r0 = 190 + 46 * g, g0 = 168 + 52 * g, b0 = 120 + 58 * g;
+        out[k] = pack((r0 + (246 - r0) * cov) | 0, (g0 + (200 - g0) * cov) | 0, (b0 + (50 - b0) * cov) | 0);
+        continue;
+      }
+      out[k] = LUT[i];
+    }
+    ctx.putImageData(img, 0, 0);
+  }
+
+  // ---------- controls ----------
+  const $ = id => document.getElementById(id);
+  const readout = $('readout'), playBtn = $('play'), hint = $('hint');
+  const TOOL_HELP = {
+    oat: 'Oats attract it. Tap to drop a flake, drag to lay a line of them.',
+    salt: 'Salt repels it. Paint a wall and watch the network route around it.',
+    erase: 'Removes salt and oats under the brush.'
+  };
+  let tool = 'oat';
+  function setTool(name) {
+    tool = name;
+    document.querySelectorAll('[data-tool]').forEach(b => b.setAttribute('aria-pressed', String(b.dataset.tool === name)));
+    $('toolhelp').textContent = TOOL_HELP[name];
+  }
+  document.querySelectorAll('[data-tool]').forEach(b => b.addEventListener('click', () => setTool(b.dataset.tool)));
+
+  const FORMAT = {
+    sa: v => v + '°',
+    ra: v => v + '°',
+    so: v => v + ' cells',
+    decay: v => v + '% per step',
+    speed: v => v + (v === 1 ? ' step' : ' steps') + ' per frame'
+  };
+  function syncSliders() {
+    for (const id in FORMAT) { $(id).value = P[id]; $(id + '-v').textContent = FORMAT[id](P[id]); }
+  }
+  function markPreset(name) {
+    document.querySelectorAll('[data-preset]').forEach(b => b.setAttribute('aria-pressed', String(b.dataset.preset === name)));
+  }
+  for (const id in FORMAT) {
+    $(id).addEventListener('input', e => {
+      P[id] = parseFloat(e.target.value);
+      $(id + '-v').textContent = FORMAT[id](P[id]);
+      if (id !== 'speed') markPreset(null);
+    });
+  }
+  document.querySelectorAll('[data-preset]').forEach(b => b.addEventListener('click', () => {
+    Object.assign(P, PRESETS[b.dataset.preset]);
+    syncSliders();
+    markPreset(b.dataset.preset);
+  }));
+
+  function updateReadout() {
+    readout.textContent = M.toLocaleString() + ' particles · step ' + stepCount.toLocaleString() + ' · ' + (paused ? 'paused' : fps + ' fps');
+  }
+  function setPaused(p) { paused = p; playBtn.textContent = p ? 'Play' : 'Pause'; updateReadout(); }
+  playBtn.addEventListener('click', () => setPaused(!paused));
+  $('inoc').addEventListener('click', () => { inoculate(); if (paused) render(); updateReadout(); });
+  $('scatter').addEventListener('click', () => { scatterOats(8); if (paused) render(); });
+  $('clear').addEventListener('click', () => {
+    salt.fill(0); food.fill(0); foodDirty = true;
+    inoculate(); if (paused) render(); updateReadout();
+  });
+
+  addEventListener('keydown', e => {
+    const k = e.key;
+    if (k === '1' || k === '2' || k === '3') { setTool(k === '1' ? 'oat' : k === '2' ? 'salt' : 'erase'); return; }
+    if (k === ' ' && !(e.target.closest && e.target.closest('button, input, textarea, select'))) { e.preventDefault(); setPaused(!paused); }
+  });
+
+  // painting on the dish
+  let drawing = false, lastX = 0, lastY = 0, sinceOat = 0;
+  function toSim(e) {
+    const r = cv.getBoundingClientRect();
+    return [(e.clientX - r.left) / r.width * N, (e.clientY - r.top) / r.height * N];
+  }
+  function brush(x, y) { if (tool === 'salt') paintSalt(x, y); else if (tool === 'erase') eraseAt(x, y); }
+  cv.addEventListener('pointerdown', e => {
+    e.preventDefault();
+    try { cv.setPointerCapture(e.pointerId); } catch (_) {}
+    drawing = true;
+    const [x, y] = toSim(e);
+    lastX = x; lastY = y; sinceOat = 0;
+    if (tool === 'oat') stampOat(x, y); else brush(x, y);
+    hint.classList.add('gone');
+    if (paused) render();
+  });
+  cv.addEventListener('pointermove', e => {
+    if (!drawing) return;
+    const [x, y] = toSim(e);
+    const dx = x - lastX, dy = y - lastY, d = Math.hypot(dx, dy);
+    const n = Math.max(1, Math.ceil(d / (tool === 'oat' ? 1 : 2)));
+    for (let i = 1; i <= n; i++) {
+      const px = lastX + dx * i / n, py = lastY + dy * i / n;
+      if (tool === 'oat') { sinceOat += d / n; if (sinceOat >= 15) { stampOat(px, py); sinceOat = 0; } }
+      else brush(px, py);
+    }
+    lastX = x; lastY = y;
+    if (paused) render();
+  });
+  const endDraw = () => { drawing = false; };
+  cv.addEventListener('pointerup', endDraw);
+  cv.addEventListener('pointercancel', endDraw);
+
+  // ---------- loop ----------
+  let frames = 0, lastT = performance.now(), frameNo = 0;
+  function frame(now) {
+    if (!paused) {
+      if (foodDirty) rebuildFood();
+      for (let s = 0; s < P.speed; s++) step();
+      if ((frameNo++ & 1) === 0) updateScale(false);
+      render();
+      frames++;
+    }
+    if (now - lastT >= 500) { fps = Math.round(frames * 1000 / (now - lastT)); frames = 0; lastT = now; updateReadout(); }
+    requestAnimationFrame(frame);
+  }
+
+  $('count').textContent = M.toLocaleString();
+  syncSliders();
+  markPreset('veins');
+  setTool('oat');
+  inoculate();
+  ringOats(7, R * .66);
+  rebuildFood();
+  for (let i = 0; i < 45; i++) step();
+  updateScale(true);
+  render();
+  setPaused(paused);
+  requestAnimationFrame(frame);
+})();
+</script>
+</body>
+</html>

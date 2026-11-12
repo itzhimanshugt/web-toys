@@ -1,0 +1,4 @@
+{
+ "slug": "harmonograph",
+ "brief": "HARMONOGRAPH: a Victorian drawing machine driven by damped pendulums. Simulate two lateral pendulums (x and y) plus a rotary table pendulum, each with frequency, phase, amplitude and damping; the pen traces x(t) = A1 sin(f1 t + p1) e^(-d1 t) + ... onto paper in real time, line weight varying with speed and ink pooling at slow turns. Ratios near simple fractions (3:2, 2:1, 4:3) give Lissajous-like figures; slight detuning gives slow precession, with a nudge-detune control. Presets gallery; a pull-back-and-release interaction where you drag a pendulum bob to set amplitude and phase; pen colour and nib choice; paper styles. Draw the mechanism (pendulums, table, pen arm) beside the paper, animated. Optional subtle audio sonification after a Sound on click. The first frame shows a finished drawing with the pen still moving."
+}

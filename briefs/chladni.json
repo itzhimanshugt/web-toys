@@ -1,0 +1,4 @@
+{
+ "slug": "chladni",
+ "brief": "CHLADNI PLATE: sand on a vibrating plate forms Chladni figures. Model a square plate's standing-wave modes with the classic approximation u(x,y) = cos(n pi x) cos(m pi y) - cos(m pi x) cos(n pi y) (and the + combination), plus a circular plate option with Bessel-function radial patterns. Thousands of sand grains (30k desktop / 8k phone) jitter in proportion to local vibration amplitude and drift to the nodal lines, forming the figure live. A tone generator plays a matching frequency (Web Audio after a Sound on click), and a frequency sweep slides between modes so patterns dissolve and reform. Controls: mode (n, m), sweep, amplitude, sand amount, plate shape, a bow-the-edge interaction. A brief accurate note on Ernst Chladni and his 1787 book 'Entdeckungen ueber die Theorie des Klanges'. Rendering: dark brushed-metal plate, pale sand with tiny shadows. The first frame shows a crisp formed pattern."
+}

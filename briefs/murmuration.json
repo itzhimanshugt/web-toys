@@ -1,0 +1,4 @@
+{
+ "slug": "murmuration",
+ "brief": "MURMURATION: a 3D flock of thousands of starlings (8k desktop / 2k phone) wheeling over a dusk reedbed, rendered in raw WebGL as instanced tiny birds with wing-flap animation. Use the topological rule reported by Ballerini et al. (2008): each bird responds to about 7 nearest neighbours instead of everything within a radius, approximated with a uniform spatial grid for speed; separation, alignment, cohesion, a roost attractor and ground avoidance. Predator: a peregrine falcon steered by the pointer; the flock shows escape waves propagating through it and splits and rejoins. Controls: flock size, neighbour count (1-20), speed, predator on/off, camera orbit, slow motion. Readouts: bird count, mean nearest-neighbour distance, polarisation order parameter (0-1). Beautiful dusk sky and silhouettes; the first frame already shows a dense murmuration shape."
+}

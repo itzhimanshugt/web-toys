@@ -1,0 +1,4 @@
+{
+ "slug": "snowflake",
+ "brief": "SNOWFLAKE LAB: grow unique snow crystals with Clifford Reiter's hexagonal cellular automaton (2005): a hex grid of water values; receptive cells (frozen, or with a frozen neighbour) gain gamma each step and keep their value out of diffusion; non-receptive cells diffuse by averaging with weight alpha; background vapour level beta; a cell freezes when its value reaches 1. Expose alpha, beta, gamma with presets that reproduce the classic forms (stellar dendrite, sectored plate, fern-like, simple plate) and verify each preset in the harness. Render as an icy, back-lit crystal with shading from the water field, preserving six-fold symmetry, on a dark velvet card with a millimetre scale bar. Controls: grow, pause, step, reset, grid size, a random-parameters button, and a gallery strip of flakes grown this session. Readouts: steps, crystal radius, alpha, beta, gamma. The first frame shows a fully grown stellar dendrite."
+}

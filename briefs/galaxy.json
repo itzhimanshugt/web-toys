@@ -1,0 +1,4 @@
+{
+ "slug": "galaxy",
+ "brief": "GALAXY COLLIDER: a simulation of two disk galaxies colliding, in the spirit of Toomre and Toomre (1972), who used restricted three-body models to explain tidal tails and bridges. Each galaxy has a massive core and thousands of test-particle stars in rotating disks (20k desktop / 6k phone); stars feel both cores, cores feel each other; leapfrog integration with softening, fast enough in JS. Users set disk tilts, mass ratio, pericentre distance, and prograde or retrograde spin, then launch and watch tails, bridges and rings form. Raw WebGL additive point rendering coloured by home galaxy with a glow, 3D orbit camera, time controls (pause, speed, restart from the same initial conditions), and presets including a prograde encounter that throws long tails and a head-on collision that makes a ring galaxy (do not claim exact parameters of real galaxies). The first frame shows an encounter already in progress."
+}

@@ -1,0 +1,4 @@
+{
+ "slug": "slingshot",
+ "brief": "GRAVITY SLINGSHOT: an original physics puzzle game. Launch a probe by dragging back from the launch pad (aim and power); it flies under Newtonian gravity from planets, moons and a black hole and must reach the target beacon without crashing. Show a short predicted trajectory preview (first few seconds only, so it stays a puzzle). 12 handcrafted levels that each introduce one idea (simple arc, slingshot around a moon, figure-eight, gravity assist from a moving moon, a wormhole pair, a black hole capture radius) plus a procedural endless mode. Star rating per level by shots used; level select with progress saved in localStorage (try/catch). Juicy feedback: particle trails, screen shake on crash, a satisfying win animation. Fixed-step symplectic integration. Fully touch friendly. The first frame shows level 1 with a demo probe mid-flight."
+}
