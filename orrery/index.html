@@ -1,0 +1,605 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>Brass Orrery Synth</title>
+<meta name="description" content="A clockwork orrery you play as an instrument: launch planets whose Kepler orbits strike notes each time they cross the meridian.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Cinzel:wght@500;700&family=Jost:wght@400;500&family=DM+Mono:wght@400;500&display=swap">
+<style>
+/* Layout: orrery plate is the hero (left / top); a compact brass-trimmed control column sits beside it (below on phones). */
+:root {
+  color-scheme: dark; /* a single visual world: an instrument maker's bench at night */
+  --night: #0c1418;      /* blue-green lacquer, hue-biased neutral */
+  --plate: #142026;      /* engraved plate shade */
+  --rule: #2a3a3f;       /* hairlines on the panel */
+  --brass: #cfa95e;      /* polished brass */
+  --ivory: #ece4cf;      /* bone ivory text */
+  --verdigris: #6fb3a2;  /* patina accent */
+  --garnet: #c0614f;     /* warning / selection */
+  --muted: #8d9a97;
+  --display: "Cinzel", "Trajan Pro", Georgia, serif;
+  --ui: "Jost", "Futura", "Century Gothic", "Segoe UI", sans-serif;
+  --mono: "DM Mono", ui-monospace, "Cascadia Mono", Consolas, monospace;
+}
+* { box-sizing: border-box; }
+html { background: var(--night); }
+body {
+  margin: 0; min-height: 100vh; background: var(--night); color: var(--ivory);
+  font: 15px/1.45 var(--ui);
+  padding-top: max(16px, env(safe-area-inset-top, 0px));
+  padding-bottom: max(16px, env(safe-area-inset-bottom, 0px));
+  padding-left: max(16px, env(safe-area-inset-left, 0px));
+  padding-right: max(16px, env(safe-area-inset-right, 0px));
+}
+.wrap { max-width: 1240px; margin: 0 auto; display: grid; grid-template-columns: minmax(0, 1fr) 320px; gap: 28px; align-items: start; }
+header { grid-column: 1 / -1; display: flex; flex-wrap: wrap; align-items: baseline; gap: 6px 20px; border-bottom: 1px solid var(--rule); padding-block: 0 12px; }
+h1 { font: 700 clamp(22px, 3.2vw, 34px)/1.1 var(--display); letter-spacing: .08em; margin: 0; color: var(--brass); text-wrap: balance; }
+header p { margin: 0; color: var(--muted); min-width: 0; text-wrap: balance; }
+.stage { position: relative; min-width: 0; }
+#plate { display: block; width: 100%; max-width: min(100%, 82vh); aspect-ratio: 1; margin: 0 auto; touch-action: none; cursor: crosshair; border-radius: 50%; outline: none; }
+#plate:focus-visible { box-shadow: 0 0 0 2px var(--night), 0 0 0 4px var(--verdigris); }
+#status { text-align: center; font: 13px/1.4 var(--mono); color: var(--muted); min-height: 1.4em; margin: 8px 0 0; font-variant-numeric: tabular-nums; }
+aside { display: grid; gap: 18px; min-width: 0; }
+fieldset { border: 0; border-top: 1px solid var(--rule); margin: 0; padding: 12px 0 0; display: grid; gap: 10px; min-width: 0; }
+legend { font: 500 11px/1 var(--ui); letter-spacing: .18em; text-transform: uppercase; color: var(--brass); padding: 0 8px 0 0; }
+label { font-size: 13px; color: var(--muted); display: grid; gap: 4px; min-width: 0; }
+.row { display: flex; flex-wrap: wrap; gap: 8px; }
+.row > * { min-width: 0; }
+.two { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+button, select {
+  font: 500 14px/1 var(--ui); color: var(--ivory); background: var(--plate);
+  border: 1px solid var(--rule); border-radius: 4px; padding: 9px 12px; cursor: pointer;
+}
+select { width: 100%; padding: 8px 8px; }
+button:hover, select:hover { border-color: var(--brass); }
+button:disabled { opacity: .4; cursor: default; border-color: var(--rule); }
+button:focus-visible, select:focus-visible, input:focus-visible { outline: 2px solid var(--verdigris); outline-offset: 2px; }
+#sound { background: var(--brass); color: var(--night); border-color: var(--brass); font-weight: 500; letter-spacing: .04em; }
+#sound[aria-pressed="true"] { background: transparent; color: var(--brass); }
+#remove { color: var(--garnet); }
+input[type=range] { width: 100%; accent-color: var(--brass); }
+output, .num { font-family: var(--mono); font-variant-numeric: tabular-nums; color: var(--ivory); }
+dl { display: grid; grid-template-columns: auto 1fr; gap: 6px 14px; margin: 0; font-size: 13px; }
+dt { color: var(--muted); }
+dd { margin: 0; font: 14px var(--mono); font-variant-numeric: tabular-nums; min-width: 0; }
+#ledger { list-style: none; margin: 0; padding: 0; display: grid; gap: 2px; max-height: 210px; overflow-y: auto; }
+#ledger button { width: 100%; display: grid; grid-template-columns: 14px 3.2em 1fr auto; gap: 10px; align-items: center; text-align: left; background: transparent; border-color: transparent; padding: 6px 6px; font: 13px var(--mono); font-variant-numeric: tabular-nums; }
+#ledger button[aria-current="true"] { border-color: var(--brass); background: var(--plate); }
+#ledger i { width: 10px; height: 10px; border-radius: 50%; display: block; }
+#ledger span:last-child { color: var(--muted); }
+.note { font-size: 13px; color: var(--muted); margin: 0; }
+.note b { color: var(--ivory); font-weight: 500; }
+kbd { font: 12px var(--mono); border: 1px solid var(--rule); border-radius: 3px; padding: 0 4px; color: var(--ivory); }
+@media (max-width: 860px) {
+  .wrap { grid-template-columns: minmax(0, 1fr); gap: 18px; }
+  #plate { max-width: 100%; }
+}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <h1>Brass Orrery Synth</h1>
+    <p>Drag out from the sun to launch a planet. Each one rings as it passes the meridian at twelve o'clock.</p>
+  </header>
+
+  <div class="stage">
+    <canvas id="plate" tabindex="0" aria-label="Orrery. Drag outward from the sun to launch a planet; drag from a planet to give it a moon; tap a planet to select it."></canvas>
+    <p id="status" aria-live="polite"></p>
+  </div>
+
+  <aside>
+    <div class="row">
+      <button id="sound" type="button" aria-pressed="false">Sound on</button>
+      <button id="pause" type="button" aria-pressed="false">Pause</button>
+    </div>
+
+    <fieldset>
+      <legend>Tuning</legend>
+      <div class="two">
+        <label for="scale">Scale
+          <select id="scale">
+            <option value="0">1 Major pentatonic</option>
+            <option value="1">2 Minor pentatonic</option>
+            <option value="2">3 Dorian</option>
+            <option value="3">4 Lydian</option>
+            <option value="4">5 Hirajoshi</option>
+            <option value="5">6 Whole-tone</option>
+          </select>
+        </label>
+        <label for="root">Root
+          <select id="root"></select>
+        </label>
+      </div>
+      <label for="tempo">Tempo <output id="tempoOut" for="tempo">84 BPM</output>
+        <input id="tempo" type="range" min="40" max="160" step="1" value="84">
+      </label>
+    </fieldset>
+
+    <fieldset>
+      <legend>Selected body</legend>
+      <dl>
+        <dt>Note</dt><dd id="rNote">none</dd>
+        <dt>Radius</dt><dd id="rRad">-</dd>
+        <dt>Period</dt><dd id="rPer">-</dd>
+        <dt>Moon</dt><dd id="rMoon">-</dd>
+      </dl>
+      <div class="row">
+        <button id="add" type="button">Add planet</button>
+        <button id="moon" type="button" disabled>Add moon</button>
+        <button id="remove" type="button" disabled>Remove</button>
+        <button id="clear" type="button">Clear</button>
+      </div>
+    </fieldset>
+
+    <fieldset>
+      <legend>Ledger</legend>
+      <ul id="ledger"></ul>
+    </fieldset>
+
+    <p class="note"><b>Kepler's third law</b>: a planet's period squared is proportional to its orbit radius cubed. Here 1 AU orbits in one 4-beat bar, so T = 4 &middot; a<sup>1.5</sup> beats. Kepler stated it in <i>Harmonices Mundi</i> (1619), the same book in which he gave each planet a melody.</p>
+    <p class="note"><kbd>Space</kbd> pause &middot; <kbd>1</kbd>-<kbd>6</kbd> scale &middot; <kbd>Del</kbd> remove &middot; <kbd>Esc</kbd> deselect</p>
+  </aside>
+</div>
+
+<script>
+(() => {
+"use strict";
+const $ = id => document.getElementById(id);
+const cv = $("plate"), cx = cv.getContext("2d");
+const SCALES = [[0,2,4,7,9],[0,3,5,7,10],[0,2,3,5,7,9,10],[0,2,4,6,7,9,11],[0,2,3,7,8],[0,2,4,6,8,10]];
+const SCALE_NAMES = ["Major pentatonic","Minor pentatonic","Dorian","Lydian","Hirajoshi","Whole-tone"];
+const NAMES = ["C","C#","D","D#","E","F","F#","G","G#","A","A#","B"];
+const RINGS = 13, MAX_PLANETS = 12, MAX_VOICES = 18, LOOKAHEAD = 0.12;
+const ENAMEL = ["#e7dcc0","#6fb3a2","#c0614f","#8fa6c9","#d9a441","#a98bb8"];
+const ringAU = i => 0.6 + 0.25 * i;           // ring 0 = innermost
+const periodBeats = a => 4 * Math.pow(a, 1.5); // Kepler: 1 AU = 1 bar of 4 beats
+const MOON_T = [0, 1, Math.pow(2, 1.5), Math.pow(3, 1.5)]; // moon k steps out: T = k^1.5 beats
+
+const state = { scale: 0, root: 2, bpm: 84, paused: false, sel: null };
+const planets = [];
+let ctx = null, comp, master, dryBus, delay, delayFb, voices = [];
+
+// ---------- clock: one beat timeline shared by visuals and audio ----------
+let anchorT = performance.now() / 1000, anchorBeat = 0;
+let audioClock = false; // switch to ctx.currentTime only while the context is actually running
+const clock = () => audioClock ? ctx.currentTime : performance.now() / 1000;
+const beatAt = t => state.paused ? anchorBeat : anchorBeat + (t - anchorT) * state.bpm / 60;
+const timeOf = b => anchorT + (b - anchorBeat) * 60 / state.bpm;
+function setAnchor(b) { anchorBeat = b; anchorT = clock(); }
+
+// ---------- pitch ----------
+function midiFor(ring) {
+  const sc = SCALES[state.scale], deg = RINGS - 1 - ring;
+  return 48 + state.root + 12 * Math.floor(deg / sc.length) + sc[deg % sc.length];
+}
+const noteName = m => NAMES[m % 12] + (Math.floor(m / 12) - 1);
+const hz = m => 440 * Math.pow(2, (m - 69) / 12);
+
+// ---------- bodies ----------
+let nextColor = 0;
+function addPlanet(ring, angleFrac, moonK) {
+  if (planets.length >= MAX_PLANETS) { say("The plate holds " + MAX_PLANETS + " planets. Remove one first."); return null; }
+  const b = beatAt(clock()), T = periodBeats(ringAU(ring));
+  const p = { ring, T, p0: angleFrac - b / T, nextK: 0, color: ENAMEL[nextColor++ % ENAMEL.length], flash: 0, moon: null, dead: false };
+  p.nextK = Math.floor(p.p0 + b / T) + 1;
+  planets.push(p);
+  if (moonK) setMoon(p, moonK, 0.5);
+  return p;
+}
+function setMoon(p, k, frac) {
+  const b = beatAt(clock()), T = MOON_T[k];
+  p.moon = { k, T, p0: frac - b / T, nextK: 0, flash: 0 };
+  p.moon.nextK = Math.floor(p.moon.p0 + b / T) + 1;
+}
+function removePlanet(p) {
+  const i = planets.indexOf(p); if (i < 0) return;
+  planets.splice(i, 1); p.dead = true;
+  if (state.sel === p) state.sel = null;
+  refresh();
+}
+
+// ---------- audio ----------
+function makeIR(seconds) {
+  const len = Math.floor(ctx.sampleRate * seconds), buf = ctx.createBuffer(2, len, ctx.sampleRate);
+  for (let c = 0; c < 2; c++) {
+    const d = buf.getChannelData(c);
+    for (let i = 0; i < len; i++) { const x = i / len; d[i] = (Math.random() * 2 - 1) * Math.pow(1 - x, 3) * (i < 90 ? i / 90 : 1); }
+  }
+  return buf;
+}
+function initAudio() {
+  const AC = window.AudioContext || window.webkitAudioContext;
+  if (!AC) { say("This browser has no Web Audio; the orrery runs silently."); return false; }
+  ctx = new AC();
+  ctx.onstatechange = () => { // move the beat anchor and pending visuals onto whichever clock is live
+    const t0 = clock(), b0 = beatAt(t0);
+    audioClock = ctx.state === "running";
+    const t1 = clock();
+    for (const e of events) e.t += t1 - t0;
+    anchorBeat = b0; anchorT = t1;
+  };
+  ctx.onstatechange();
+  comp = ctx.createDynamicsCompressor(); // master limiter
+  comp.threshold.value = -10; comp.knee.value = 4; comp.ratio.value = 20; comp.attack.value = 0.003; comp.release.value = 0.22;
+  master = ctx.createGain(); master.gain.value = 0.9;
+  comp.connect(master); master.connect(ctx.destination);
+  dryBus = ctx.createGain(); dryBus.connect(comp);
+  const verb = ctx.createConvolver(); verb.buffer = makeIR(2.8);
+  const verbSend = ctx.createGain(); verbSend.gain.value = 0.38;
+  dryBus.connect(verbSend); verbSend.connect(verb); verb.connect(comp);
+  delay = ctx.createDelay(2); delayFb = ctx.createGain(); delayFb.gain.value = 0.34;
+  const tone = ctx.createBiquadFilter(); tone.type = "lowpass"; tone.frequency.value = 2400;
+  const delaySend = ctx.createGain(); delaySend.gain.value = 0.22;
+  dryBus.connect(delaySend); delaySend.connect(delay); delay.connect(tone); tone.connect(delayFb); delayFb.connect(delay);
+  tone.connect(comp); tone.connect(verbSend);
+  syncDelay();
+  return true;
+}
+function syncDelay() { if (delay) delay.delayTime.setTargetAtTime(0.75 * 60 / state.bpm, ctx.currentTime, 0.05); } // dotted eighth
+function voice(t, freq, pan, bell) {
+  for (let i = voices.length - 1; i >= 0; i--) if (voices[i].end < ctx.currentTime) voices.splice(i, 1);
+  if (voices.length >= MAX_VOICES) { // steal the oldest voice with a short fade
+    const v = voices.shift(); v.g.gain.cancelScheduledValues(t); v.g.gain.setTargetAtTime(0, t, 0.015);
+  }
+  const dur = Math.max(0.9, Math.min(2.8, 2.6 - 0.6 * Math.log2(freq / 130))) * (bell ? 0.8 : 1);
+  const g = ctx.createGain(), car = ctx.createOscillator(), mod = ctx.createOscillator(), mg = ctx.createGain();
+  const part = ctx.createOscillator(), pg = ctx.createGain();
+  car.frequency.value = freq; mod.frequency.value = freq * (bell ? 3.5 : 2); part.frequency.value = freq * 4;
+  const idx = freq * (bell ? 1.1 : 1.6);
+  mg.gain.setValueAtTime(idx, t); mg.gain.exponentialRampToValueAtTime(idx * 0.02, t + (bell ? 0.6 : 0.25));
+  mod.connect(mg); mg.connect(car.frequency);
+  const peak = bell ? 0.11 : 0.16;
+  g.gain.setValueAtTime(0, t); g.gain.linearRampToValueAtTime(peak, t + 0.006); g.gain.exponentialRampToValueAtTime(0.0005, t + dur);
+  pg.gain.setValueAtTime(0, t); pg.gain.linearRampToValueAtTime(peak * 0.25, t + 0.003); pg.gain.exponentialRampToValueAtTime(0.0003, t + 0.3);
+  car.connect(g); part.connect(pg); pg.connect(g);
+  let out = g;
+  if (ctx.createStereoPanner) { const pn = ctx.createStereoPanner(); pn.pan.value = pan; g.connect(pn); out = pn; }
+  out.connect(dryBus);
+  const stop = t + dur + 0.05;
+  car.start(t); mod.start(t); part.start(t); car.stop(stop); mod.stop(stop); part.stop(stop);
+  voices.push({ g, end: stop });
+}
+
+// ---------- scheduler: lookahead on the audio clock ----------
+const events = []; // {t, p, moon}
+function schedule() {
+  const now = clock(), bNow = beatAt(now), horizon = beatAt(now + LOOKAHEAD);
+  if (state.paused) return;
+  for (const p of planets) {
+    let cb;
+    while ((cb = (p.nextK - p.p0) * p.T) <= horizon) {
+      if (cb >= bNow - 0.05) fire(p, false, timeOf(cb));
+      p.nextK++;
+    }
+    const m = p.moon;
+    if (m) while ((cb = (m.nextK - m.p0) * m.T) <= horizon) {
+      if (cb >= bNow - 0.05) fire(p, true, timeOf(cb));
+      m.nextK++;
+    }
+  }
+}
+function fire(p, isMoon, t) {
+  if (audioClock && master.gain.value > 0) {
+    const midi = midiFor(p.ring) + (isMoon ? 12 : 0);
+    voice(Math.max(t, ctx.currentTime + 0.005), hz(midi), ((p.ring % 5) - 2) * 0.22, isMoon);
+  }
+  events.push({ t, p, moon: isMoon });
+}
+setInterval(schedule, 25);
+
+// ---------- geometry ----------
+let W = 0, R = 0, rIn = 0, step = 0, dpr = 1, mid = 0;
+const ringR = i => rIn + step * i;
+function resize() {
+  const css = cv.getBoundingClientRect().width || 600;
+  dpr = Math.min(window.devicePixelRatio || 1, matchMedia("(max-width: 600px)").matches ? 2 : 2.5);
+  cv.width = Math.round(css * dpr); cv.height = cv.width;
+  W = css; mid = W / 2; R = W / 2 - Math.max(14, W * 0.035);
+  rIn = R * 0.2; step = (R - rIn) / (RINGS - 1);
+}
+new ResizeObserver(() => { resize(); render(performance.now(), 0); }).observe(cv);
+resize();
+
+function planetPos(p, b, out) {
+  const a = 2 * Math.PI * (p.p0 + b / p.T), r = ringR(p.ring);
+  out.x = mid + r * Math.sin(a); out.y = mid - r * Math.cos(a); out.a = a;
+  return out;
+}
+const moonR = k => Math.max(7, step * 0.32) * k;
+function moonPos(p, pp, b, out) {
+  const m = p.moon, a = 2 * Math.PI * (m.p0 + b / m.T), r = moonR(m.k);
+  out.x = pp.x + r * Math.sin(a); out.y = pp.y - r * Math.cos(a);
+  return out;
+}
+
+// ---------- pulses (fixed pool) ----------
+const pulses = Array.from({ length: 48 }, () => ({ on: false, x: 0, y: 0, t: 0, c: "", s: 1 }));
+let pulseI = 0, meridianGlow = 0;
+function pulse(x, y, c, s) { const q = pulses[pulseI++ % pulses.length]; q.on = true; q.x = x; q.y = y; q.t = performance.now(); q.c = c; q.s = s; }
+
+// ---------- drawing ----------
+const tmpP = { x: 0, y: 0, a: 0 }, tmpM = { x: 0, y: 0 };
+const reduce = matchMedia("(prefers-reduced-motion: reduce)").matches;
+let drag = null, hover = { x: -1, y: -1 };
+
+function drawPlate(b) {
+  cx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  cx.clearRect(0, 0, W, W);
+  // plate
+  const g = cx.createRadialGradient(mid, mid * 0.9, R * 0.1, mid, mid, R + 12);
+  g.addColorStop(0, "#1b2a30"); g.addColorStop(1, "#0f191d");
+  cx.fillStyle = g; cx.beginPath(); cx.arc(mid, mid, R + 10, 0, 7); cx.fill();
+  cx.strokeStyle = "#cfa95e"; cx.lineWidth = 2; cx.beginPath(); cx.arc(mid, mid, R + 10, 0, 7); cx.stroke();
+  cx.lineWidth = 0.75; cx.beginPath(); cx.arc(mid, mid, R + 5, 0, 7); cx.stroke();
+  // degree ticks on the bezel
+  cx.strokeStyle = "rgba(207,169,94,.55)";
+  cx.beginPath();
+  for (let d = 0; d < 360; d += 5) {
+    const a = d * Math.PI / 180, l = d % 30 === 0 ? 5 : 2.5, s = Math.sin(a), c = Math.cos(a);
+    cx.moveTo(mid + s * (R + 5), mid - c * (R + 5)); cx.lineTo(mid + s * (R + 5 - l), mid - c * (R + 5 - l));
+  }
+  cx.stroke();
+  // staff rings
+  const fs = Math.max(8.5, Math.min(11, step * 0.42));
+  cx.font = "500 " + fs + "px 'DM Mono', monospace"; cx.textBaseline = "middle";
+  for (let i = 0; i < RINGS; i++) {
+    const r = ringR(i), m = midiFor(i), isRoot = (m - state.root) % 12 === 0;
+    cx.strokeStyle = isRoot ? "rgba(207,169,94,.55)" : "rgba(207,169,94,.2)";
+    cx.lineWidth = isRoot ? 1 : 0.7;
+    cx.beginPath(); cx.arc(mid, mid, r, 0, 7); cx.stroke();
+    cx.fillStyle = isRoot ? "#cfa95e" : "rgba(236,228,207,.42)";
+    cx.fillText(noteName(m), mid + 5, mid - r + fs * 0.7);
+  }
+  // meridian hairline
+  const mg = Math.min(1, meridianGlow);
+  if (mg > 0.01) {
+    const lg = cx.createLinearGradient(mid, mid, mid, mid - R);
+    lg.addColorStop(0, "rgba(111,179,162,0)"); lg.addColorStop(1, "rgba(111,179,162," + (0.5 * mg) + ")");
+    cx.strokeStyle = lg; cx.lineWidth = 6; cx.beginPath(); cx.moveTo(mid, mid - rIn * 0.6); cx.lineTo(mid, mid - R - 8); cx.stroke();
+  }
+  cx.strokeStyle = "rgba(236,228,207," + (0.45 + 0.5 * mg) + ")"; cx.lineWidth = 0.8;
+  cx.beginPath(); cx.moveTo(mid, mid - rIn * 0.6); cx.lineTo(mid, mid - R - 10); cx.stroke();
+  cx.fillStyle = "#cfa95e"; cx.beginPath(); cx.moveTo(mid, mid - R - 4); cx.lineTo(mid - 4, mid - R - 12); cx.lineTo(mid + 4, mid - R - 12); cx.fill();
+}
+
+function drawSun() {
+  const sr = rIn * 0.55;
+  const g = cx.createRadialGradient(mid - sr * 0.3, mid - sr * 0.3, sr * 0.1, mid, mid, sr);
+  g.addColorStop(0, "#fff1c9"); g.addColorStop(0.45, "#e2b65f"); g.addColorStop(1, "#8a6326");
+  cx.strokeStyle = "rgba(207,169,94,.6)"; cx.lineWidth = 1;
+  cx.beginPath();
+  for (let k = 0; k < 16; k++) { const a = k * Math.PI / 8, s = Math.sin(a), c = Math.cos(a), l = k % 2 ? 1.25 : 1.5; cx.moveTo(mid + s * sr * 1.08, mid - c * sr * 1.08); cx.lineTo(mid + s * sr * l, mid - c * sr * l); }
+  cx.stroke();
+  cx.fillStyle = g; cx.beginPath(); cx.arc(mid, mid, sr, 0, 7); cx.fill();
+}
+
+function drawBodies(b, now) {
+  // arms first (behind everything): a real orrery carries each planet on a brass arm
+  cx.lineWidth = 1.4;
+  for (const p of planets) {
+    planetPos(p, b, tmpP);
+    cx.strokeStyle = p === state.sel ? "rgba(207,169,94,.9)" : "rgba(207,169,94,.32)";
+    cx.beginPath(); cx.moveTo(mid, mid); cx.lineTo(tmpP.x, tmpP.y); cx.stroke();
+  }
+  for (const p of planets) {
+    planetPos(p, b, tmpP);
+    const r = ringR(p.ring);
+    // faint trail: tapered arc segments behind the planet
+    cx.lineWidth = 2;
+    for (let s = 0; s < 8; s++) {
+      const a1 = tmpP.a - 0.055 * s, a0 = a1 - 0.055;
+      cx.strokeStyle = "rgba(236,228,207," + (0.22 * (1 - s / 8)) + ")";
+      cx.beginPath(); cx.arc(mid, mid, r, a0 - Math.PI / 2, a1 - Math.PI / 2); cx.stroke();
+    }
+    const pr = Math.max(5, Math.min(9, step * 0.3)) + p.flash * 2.5;
+    if (p.moon) {
+      const mr = moonR(p.moon.k);
+      cx.strokeStyle = "rgba(236,228,207,.16)"; cx.lineWidth = 0.7;
+      cx.beginPath(); cx.arc(tmpP.x, tmpP.y, mr, 0, 7); cx.stroke();
+      cx.beginPath(); cx.moveTo(tmpP.x, tmpP.y - mr - 3); cx.lineTo(tmpP.x, tmpP.y - mr + 3); cx.stroke(); // planet's own meridian
+      moonPos(p, tmpP, b, tmpM);
+      cx.fillStyle = "#ece4cf";
+      cx.beginPath(); cx.arc(tmpM.x, tmpM.y, 2.6 + p.moon.flash * 1.8, 0, 7); cx.fill();
+    }
+    if (p.flash > 0.02) { cx.fillStyle = p.color; cx.globalAlpha = 0.25 * p.flash; cx.beginPath(); cx.arc(tmpP.x, tmpP.y, pr * 2.4, 0, 7); cx.fill(); cx.globalAlpha = 1; }
+    const g = cx.createRadialGradient(tmpP.x - pr * 0.35, tmpP.y - pr * 0.35, pr * 0.1, tmpP.x, tmpP.y, pr);
+    g.addColorStop(0, "#fffaf0"); g.addColorStop(0.35, p.color); g.addColorStop(1, "#11191c");
+    cx.fillStyle = g; cx.beginPath(); cx.arc(tmpP.x, tmpP.y, pr, 0, 7); cx.fill();
+    if (p === state.sel) { cx.strokeStyle = "#c0614f"; cx.lineWidth = 1.5; cx.beginPath(); cx.arc(tmpP.x, tmpP.y, pr + 5, 0, 7); cx.stroke(); }
+  }
+  // pulse rings
+  for (const q of pulses) {
+    if (!q.on) continue;
+    const k = (now - q.t) / 900;
+    if (k >= 1) { q.on = false; continue; }
+    cx.strokeStyle = q.c; cx.globalAlpha = (1 - k) * 0.8; cx.lineWidth = 1.5 * (1 - k) + 0.3;
+    cx.beginPath(); cx.arc(q.x, q.y, (6 + k * 34) * q.s, 0, 7); cx.stroke();
+  }
+  cx.globalAlpha = 1;
+}
+
+function drawDrag(b) {
+  if (!drag || !drag.moved) return;
+  cx.setLineDash([3, 4]); cx.lineWidth = 1;
+  if (drag.kind === "launch") {
+    const ring = ringFromPoint(drag.x, drag.y), r = ringR(ring), a = Math.atan2(drag.x - mid, mid - drag.y);
+    cx.strokeStyle = "rgba(111,179,162,.9)";
+    cx.beginPath(); cx.arc(mid, mid, r, 0, 7); cx.stroke();
+    cx.beginPath(); cx.moveTo(mid, mid); cx.lineTo(mid + r * Math.sin(a), mid - r * Math.cos(a)); cx.stroke();
+    cx.setLineDash([]);
+    cx.fillStyle = "rgba(111,179,162,.9)"; cx.beginPath(); cx.arc(mid + r * Math.sin(a), mid - r * Math.cos(a), 6, 0, 7); cx.fill();
+  } else if (drag.kind === "moon" && !drag.p.dead) {
+    planetPos(drag.p, b, tmpP);
+    const k = moonStepFrom(drag.p, b, drag.x, drag.y);
+    cx.strokeStyle = "rgba(236,228,207,.85)";
+    cx.beginPath(); cx.arc(tmpP.x, tmpP.y, moonR(k), 0, 7); cx.stroke();
+    cx.beginPath(); cx.moveTo(tmpP.x, tmpP.y); cx.lineTo(drag.x, drag.y); cx.stroke();
+  }
+  cx.setLineDash([]);
+}
+
+let lastFrame = performance.now();
+function frame() {
+  const now = performance.now(), dt = Math.min(0.1, (now - lastFrame) / 1000); lastFrame = now;
+  render(now, dt);
+  requestAnimationFrame(frame);
+}
+function render(now, dt) {
+  const t = clock(), b = beatAt(t);
+  // fire visuals for notes whose scheduled time has arrived
+  for (let i = 0; i < events.length; i++) {
+    const e = events[i];
+    if (e.t > t) continue;
+    if (!e.p.dead) {
+      planetPos(e.p, b, tmpP);
+      if (e.moon) { e.p.moon && (e.p.moon.flash = 1); moonPos(e.p, tmpP, b, tmpM); pulse(tmpM.x, tmpM.y, "#ece4cf", 0.55); }
+      else { e.p.flash = 1; pulse(tmpP.x, tmpP.y, e.p.color, 1); meridianGlow = 1; }
+    }
+    events.splice(i--, 1);
+  }
+  const decay = Math.exp(-dt * 4);
+  meridianGlow *= decay;
+  for (const p of planets) { p.flash *= decay; if (p.moon) p.moon.flash *= decay; }
+  drawPlate(b); drawBodies(b, now); drawSun(); drawDrag(b);
+  if (state.sel) updateReadout();
+}
+
+// ---------- pointer ----------
+function ringFromPoint(x, y) {
+  const d = Math.hypot(x - mid, y - mid);
+  return Math.max(0, Math.min(RINGS - 1, Math.round((d - rIn) / step)));
+}
+function moonStepFrom(p, b, x, y) {
+  planetPos(p, b, tmpP);
+  return Math.max(1, Math.min(3, Math.round(Math.hypot(x - tmpP.x, y - tmpP.y) / moonR(1))));
+}
+function hitPlanet(x, y, b, touch) {
+  let best = null, bd = touch ? 24 : 16;
+  for (const p of planets) { planetPos(p, b, tmpP); const d = Math.hypot(x - tmpP.x, y - tmpP.y); if (d < bd) { bd = d; best = p; } }
+  return best;
+}
+function local(e) { const r = cv.getBoundingClientRect(); return { x: (e.clientX - r.left) * W / r.width, y: (e.clientY - r.top) * W / r.height }; }
+cv.addEventListener("pointerdown", e => {
+  const pt = local(e), b = beatAt(clock()), p = hitPlanet(pt.x, pt.y, b, e.pointerType === "touch");
+  drag = { kind: p ? "moon" : "launch", p, x: pt.x, y: pt.y, sx: pt.x, sy: pt.y, moved: false };
+  cv.setPointerCapture(e.pointerId);
+  e.preventDefault();
+  cv.focus({ preventScroll: true });
+});
+cv.addEventListener("pointermove", e => {
+  if (!drag) return;
+  const pt = local(e); drag.x = pt.x; drag.y = pt.y;
+  if (Math.hypot(pt.x - drag.sx, pt.y - drag.sy) > 8) drag.moved = true;
+  if (drag.moved && drag.kind === "launch") { const ring = ringFromPoint(pt.x, pt.y); say("Release to launch on ring " + (ring + 1) + ": " + noteName(midiFor(ring)) + ", " + periodBeats(ringAU(ring)).toFixed(2) + " beats"); }
+});
+function endDrag(e, cancel) {
+  if (!drag) return;
+  const d = drag; drag = null;
+  if (cancel) return;
+  const b = beatAt(clock());
+  if (!d.moved) { state.sel = d.p; refresh(); if (d.p) say(describe(d.p)); return; }
+  if (d.kind === "launch") {
+    const ring = ringFromPoint(d.x, d.y), a = Math.atan2(d.x - mid, mid - d.y) / (2 * Math.PI);
+    const p = addPlanet(ring, (a + 1) % 1);
+    if (p) { state.sel = p; refresh(); say("Launched " + describe(p)); }
+  } else if (!d.p.dead) {
+    const k = moonStepFrom(d.p, b, d.x, d.y);
+    planetPos(d.p, b, tmpP);
+    const ma = Math.atan2(d.x - tmpP.x, tmpP.y - d.y) / (2 * Math.PI);
+    setMoon(d.p, k, (ma + 1) % 1); state.sel = d.p; refresh();
+    say("Moon set: " + MOON_T[k].toFixed(2) + "-beat orbit, plays " + noteName(midiFor(d.p.ring) + 12));
+  }
+}
+cv.addEventListener("pointerup", e => endDrag(e, false));
+cv.addEventListener("pointercancel", e => endDrag(e, true));
+
+// ---------- UI ----------
+const statusEl = $("status");
+function say(s) { statusEl.textContent = s; }
+function describe(p) { return noteName(midiFor(p.ring)) + " on ring " + (p.ring + 1) + ", " + ringAU(p.ring).toFixed(2) + " AU, " + p.T.toFixed(2) + " beats"; }
+function updateReadout() {
+  const p = state.sel;
+  if (!p) { $("rNote").textContent = "none"; $("rRad").textContent = $("rPer").textContent = $("rMoon").textContent = "-"; return; }
+  $("rNote").textContent = noteName(midiFor(p.ring)) + "  ·  " + hz(midiFor(p.ring)).toFixed(1) + " Hz";
+  $("rRad").textContent = ringAU(p.ring).toFixed(2) + " AU  ·  ring " + (p.ring + 1);
+  $("rPer").textContent = p.T.toFixed(2) + " beats  ·  " + (p.T * 60 / state.bpm).toFixed(1) + " s";
+  $("rMoon").textContent = p.moon ? noteName(midiFor(p.ring) + 12) + "  ·  " + p.moon.T.toFixed(2) + " beats" : "none";
+}
+function refresh() {
+  const ul = $("ledger"); ul.textContent = "";
+  planets.slice().sort((a, b) => a.ring - b.ring).forEach(p => {
+    const li = document.createElement("li"), bt = document.createElement("button");
+    bt.type = "button"; bt.setAttribute("aria-current", p === state.sel ? "true" : "false");
+    bt.innerHTML = '<i style="background:' + p.color + '"></i><span>' + noteName(midiFor(p.ring)) + "</span><span>" + ringAU(p.ring).toFixed(2) + " AU" + (p.moon ? " + moon" : "") + "</span><span>" + p.T.toFixed(2) + " b</span>";
+    bt.setAttribute("aria-label", "Select " + describe(p));
+    bt.onclick = () => { state.sel = p; refresh(); };
+    li.appendChild(bt); ul.appendChild(li);
+  });
+  if (!planets.length) { const li = document.createElement("li"); li.className = "note"; li.textContent = "Empty plate. Drag out from the sun."; ul.appendChild(li); }
+  $("remove").disabled = $("moon").disabled = !state.sel;
+  updateReadout();
+}
+
+const rootSel = $("root");
+NAMES.forEach((n, i) => { const o = document.createElement("option"); o.value = i; o.textContent = n; rootSel.appendChild(o); });
+rootSel.value = state.root;
+rootSel.onchange = () => { state.root = +rootSel.value; refresh(); say("Root " + NAMES[state.root]); };
+const scaleSel = $("scale");
+function setScale(i) { state.scale = i; scaleSel.value = i; refresh(); say(SCALE_NAMES[i] + " on " + NAMES[state.root]); }
+scaleSel.onchange = () => setScale(+scaleSel.value);
+const tempo = $("tempo");
+tempo.oninput = () => { setAnchor(beatAt(clock())); state.bpm = +tempo.value; $("tempoOut").textContent = state.bpm + " BPM"; syncDelay(); };
+
+function setPaused(v) {
+  setAnchor(beatAt(clock()));
+  state.paused = v;
+  $("pause").textContent = v ? "Play" : "Pause"; $("pause").setAttribute("aria-pressed", v ? "true" : "false");
+  if (!v) for (const p of planets) { // realign crossing counters after the freeze
+    p.nextK = Math.floor(p.p0 + anchorBeat / p.T) + 1;
+    if (p.moon) p.moon.nextK = Math.floor(p.moon.p0 + anchorBeat / p.moon.T) + 1;
+  }
+}
+$("pause").onclick = () => setPaused(!state.paused);
+$("sound").onclick = () => {
+  const s = $("sound");
+  if (!ctx) { if (!initAudio()) return; }
+  if (ctx.state === "suspended") ctx.resume();
+  const on = s.getAttribute("aria-pressed") !== "true";
+  master.gain.setTargetAtTime(on ? 0.9 : 0, ctx.currentTime, 0.03);
+  master.gain.value = on ? 0.9 : 0;
+  s.setAttribute("aria-pressed", on ? "true" : "false"); s.textContent = on ? "Sound off" : "Sound on";
+};
+$("add").onclick = () => {
+  const used = new Set(planets.map(p => p.ring)), free = [];
+  for (let i = 0; i < RINGS; i++) if (!used.has(i)) free.push(i);
+  const pool = free.length ? free : [...Array(RINGS).keys()];
+  const p = addPlanet(pool[Math.floor(Math.random() * pool.length)], Math.random());
+  if (p) { state.sel = p; refresh(); say("Launched " + describe(p)); }
+};
+$("moon").onclick = () => { const p = state.sel; if (!p) return; const k = p.moon ? p.moon.k % 3 + 1 : 1; setMoon(p, k, 0.5); refresh(); say("Moon set: " + MOON_T[k].toFixed(2) + "-beat orbit"); };
+$("remove").onclick = () => { if (state.sel) { removePlanet(state.sel); say("Planet removed"); } };
+$("clear").onclick = () => { planets.slice().forEach(p => p.dead = true); planets.length = 0; state.sel = null; refresh(); say("Plate cleared"); };
+
+window.addEventListener("keydown", e => {
+  const tag = e.target.tagName;
+  if (tag === "SELECT" || (tag === "INPUT" && e.target.type !== "range") || e.ctrlKey || e.metaKey || e.altKey) return;
+  if (e.code === "Space") { e.preventDefault(); if (tag === "BUTTON") e.target.blur(); setPaused(!state.paused); }
+  else if (e.key >= "1" && e.key <= "6") setScale(+e.key - 1);
+  else if ((e.key === "Delete" || e.key === "Backspace") && state.sel) { e.preventDefault(); removePlanet(state.sel); say("Planet removed"); }
+  else if (e.key === "Escape") { state.sel = null; refresh(); }
+});
+
+// ---------- seed: five planets, one with a moon ----------
+[[1, 0.62, 0], [3, 0.18, 0], [5, 0.83, 2], [8, 0.41, 0], [11, 0.95, 0]].forEach(s => addPlanet(s[0], s[1], s[2]));
+refresh();
+if (reduce) setPaused(true);
+say(reduce ? "Paused for reduced motion. Press Play or Space to run." : "Press Sound on to hear the system.");
+requestAnimationFrame(frame);
+})();
+</script>
+</body>
+</html>
