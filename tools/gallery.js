@@ -4,8 +4,10 @@ const fs = require('fs')
 const path = require('path')
 const root = path.join(__dirname, '..')
 const esc = s => s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/"/g, '&quot;')
+// only toys already committed, so the gallery never links to a page that isn't pushed
+const tracked = require('child_process').execSync('git ls-files', { cwd: root }).toString().split('\n')
 const toys = fs.readdirSync(root)
-  .filter(d => fs.existsSync(path.join(root, d, 'index.html')))
+  .filter(d => tracked.includes(d + '/index.html'))
   .map(slug => {
     const html = fs.readFileSync(path.join(root, slug, 'index.html'), 'utf8')
     const title = (html.match(/<title>([^<]*)<\/title>/) || [, slug])[1].trim()
