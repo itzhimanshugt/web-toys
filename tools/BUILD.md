@@ -35,3 +35,7 @@ Required before you finish: desktop and phone screenshots both look right, zero 
 Use the PowerShell tool for commands. Iterate (write, test, look, fix) until it is genuinely excellent.
 
 Quality bar: this should feel like a small studio shipped it. Physics and maths must be correct; every control must work on mouse, touch and keyboard; performance must hold up. Prefer a focused, flawless set of features over a long buggy list, but deliver everything the brief marks as must-have.
+
+Harness notes (learned from earlier builds, saves you turns):
+- Headless Edge will not make a window narrower than about 496px, so `-Width 390` crops a 496px layout. For a true 390px check, use an -InjectFile probe that re-renders the page inside a 390x844 iframe (srcdoc of document.documentElement.outerHTML) and logs the overflow result from inside it.
+- With the default requestAnimationFrame shim, WebGL or heavy canvas frames sometimes capture blank even though the page is fine. If a shot is blank, re-run with -NoRafShim before debugging; if that renders, move on and mention it in your report. Do not spend more than a few turns on harness quirks.
