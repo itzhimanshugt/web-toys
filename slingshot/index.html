@@ -1,0 +1,551 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>Periapsis Run</title>
+<meta name="description" content="A gravity slingshot puzzle: pull back to launch a probe past planets, moving moons, wormholes and a black hole to reach the beacon.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Big+Shoulders+Display:wght@600;800&family=Atkinson+Hyperlegible:wght@400;700&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet">
+<style>
+/* Layout: navigation chart canvas is the hero (left / top); a flight log panel holds level, aim, levels and field notes. */
+:root{
+  --void:#091017;   /* deep space, green-biased black */
+  --deck:#121c25;   /* panel steel */
+  --chalk:#ebe5d3;  /* chart ink */
+  --haze:#7f929e;   /* grid and muted labels */
+  --amber:#ffb547;  /* probe and launch */
+  --beacon:#5fe3c6; /* target beacon */
+  --hazard:#ff6a5c; /* crash and capture */
+  --rule:color-mix(in srgb,var(--haze) 30%,transparent);
+  --display:"Big Shoulders Display","Arial Narrow","Helvetica Neue Condensed",Impact,sans-serif;
+  --body:"Atkinson Hyperlegible","Segoe UI",system-ui,-apple-system,sans-serif;
+  --mono:"JetBrains Mono",ui-monospace,"Cascadia Mono",Consolas,monospace;
+  color-scheme:dark;
+}
+*{box-sizing:border-box}
+html{background:var(--void)}
+body{margin:0;background:var(--void);color:var(--chalk);font:15px/1.5 var(--body);
+  padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}
+.wrap{padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));padding-block:14px 24px;max-width:1500px;margin:0 auto}
+header{display:flex;align-items:baseline;gap:14px 18px;flex-wrap:wrap;margin-bottom:12px}
+h1{font:800 clamp(30px,4vw,44px)/.95 var(--display);letter-spacing:.02em;text-transform:uppercase;margin:0;text-wrap:balance}
+h1 span{color:var(--amber)}
+.tag{font:400 12px/1.4 var(--mono);letter-spacing:.14em;text-transform:uppercase;color:var(--haze);min-width:0}
+.layout{display:grid;grid-template-columns:minmax(0,1fr) 340px;gap:18px;align-items:start}
+.stage{position:relative;height:min(calc(100dvh - 110px),1000px);min-height:420px;border:1px solid var(--rule);background:var(--void);overflow:hidden;touch-action:none}
+canvas{display:block;width:100%;height:100%;touch-action:none;cursor:crosshair}
+canvas:focus-visible{outline:2px solid var(--amber);outline-offset:-3px}
+.hud{position:absolute;pointer-events:none;font:400 11px/1.3 var(--mono);letter-spacing:.12em;text-transform:uppercase;color:var(--haze)}
+.hud b{display:block;font:600 15px/1.2 var(--mono);color:var(--chalk);letter-spacing:.04em;font-variant-numeric:tabular-nums}
+.hud.tl{top:12px;left:14px}
+.hud.tl b{font:800 22px/1 var(--display);letter-spacing:.06em}
+.hud.bl{left:14px;bottom:12px;display:flex;gap:18px}
+.hud.tr{top:12px;right:14px;text-align:right}
+#hint{color:var(--amber)}
+.result{position:absolute;left:50%;bottom:22px;transform:translateX(-50%);width:min(340px,calc(100% - 28px));background:color-mix(in srgb,var(--deck) 92%,transparent);border:1px solid var(--beacon);padding:16px 18px;display:grid;gap:10px;text-align:center}
+.result[hidden]{display:none}
+.result h2{margin:0;font:800 28px/1 var(--display);letter-spacing:.05em;text-transform:uppercase;color:var(--beacon)}
+.result p{margin:0;font:400 12px/1.4 var(--mono);letter-spacing:.1em;text-transform:uppercase;color:var(--haze)}
+.stars{display:flex;justify-content:center;gap:8px}
+.stars svg{width:34px;height:34px;fill:color-mix(in srgb,var(--haze) 35%,transparent);transform:scale(.4);opacity:0}
+.stars svg.on{fill:var(--amber)}
+.result.show .stars svg{animation:pop .42s cubic-bezier(.3,1.6,.5,1) forwards}
+.result.show .stars svg:nth-child(2){animation-delay:.14s}
+.result.show .stars svg:nth-child(3){animation-delay:.28s}
+@keyframes pop{to{transform:scale(1);opacity:1}}
+.row{display:flex;gap:8px;flex-wrap:wrap}
+.row>*{flex:1 1 0;min-width:0}
+.panel{display:grid;gap:14px;min-width:0}
+.block{border-top:1px solid var(--rule);padding-top:12px;display:grid;gap:10px;min-width:0}
+.block:first-child{border-top:0;padding-top:0}
+.label{font:600 11px/1 var(--mono);letter-spacing:.16em;text-transform:uppercase;color:var(--haze);margin:0}
+#lvName{font:800 30px/1 var(--display);letter-spacing:.04em;text-transform:uppercase;margin:0;text-wrap:balance}
+#lvIdea{margin:0;color:color-mix(in srgb,var(--chalk) 82%,var(--haze))}
+.stats{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px}
+.stat{background:var(--deck);padding:8px 10px;min-width:0}
+.stat span{display:block;font:400 10px/1.2 var(--mono);letter-spacing:.14em;text-transform:uppercase;color:var(--haze)}
+.stat b{font:600 20px/1.3 var(--mono);font-variant-numeric:tabular-nums}
+button{font:600 12px/1 var(--mono);letter-spacing:.12em;text-transform:uppercase;color:var(--chalk);background:transparent;border:1px solid color-mix(in srgb,var(--haze) 55%,transparent);border-radius:3px;padding:11px 10px;cursor:pointer;min-height:40px}
+button:hover{border-color:var(--chalk)}
+button:focus-visible,input:focus-visible{outline:2px solid var(--amber);outline-offset:2px}
+button.primary{background:var(--amber);color:var(--void);border-color:var(--amber)}
+button.primary:hover{background:color-mix(in srgb,var(--amber) 78%,white)}
+button:disabled{opacity:.35;cursor:not-allowed}
+.aim{display:grid;gap:8px}
+.aim label{display:grid;grid-template-columns:76px minmax(0,1fr) 70px;align-items:center;gap:8px;font:400 11px/1 var(--mono);letter-spacing:.12em;text-transform:uppercase;color:var(--haze)}
+.aim output{font:600 13px/1 var(--mono);color:var(--chalk);text-align:right;font-variant-numeric:tabular-nums;letter-spacing:.02em}
+input[type=range]{width:100%;min-width:0;accent-color:var(--amber);margin:0;height:26px}
+.grid{display:grid;grid-template-columns:repeat(6,minmax(0,1fr));gap:6px}
+.grid button{padding:8px 0 7px;display:grid;gap:5px;justify-items:center;font-size:13px;min-height:46px}
+.grid button.cur{border-color:var(--amber);color:var(--amber)}
+.pips{display:flex;gap:3px}
+.pips i{width:5px;height:5px;border-radius:50%;background:color-mix(in srgb,var(--haze) 35%,transparent)}
+.pips i.on{background:var(--amber)}
+#endless.cur{border-color:var(--beacon);color:var(--beacon)}
+.notes{margin:0;padding:0;list-style:none;display:grid;gap:8px;font-size:13.5px;color:color-mix(in srgb,var(--chalk) 75%,var(--haze))}
+.notes b{color:var(--chalk)}
+kbd{font:600 11px/1 var(--mono);border:1px solid var(--rule);padding:2px 5px;border-radius:3px;color:var(--chalk)}
+.keys{font-size:12.5px;color:var(--haze);margin:0}
+@media (max-width:900px){
+  .layout{grid-template-columns:minmax(0,1fr)}
+  .stage{height:auto;aspect-ratio:1/1.08;min-height:0}
+}
+@media (max-width:600px){
+  .hud.tl b{font-size:18px}
+  .hud.bl{gap:12px}
+  .hud b{font-size:13px}
+  .hud.tr{display:none}
+}
+</style>
+</head>
+<body>
+<div class="wrap">
+<header>
+  <h1>Periapsis <span>Run</span></h1>
+  <p class="tag">Gravity slingshot chart &middot; 12 sorties + endless sectors</p>
+</header>
+<main class="layout">
+  <section class="stage" id="stage" aria-label="Flight chart">
+    <canvas id="sky" tabindex="0" aria-label="Flight chart. Drag back anywhere to aim and set power, release to launch. Arrow keys aim, Space launches."></canvas>
+    <div class="hud tl"><span id="hudCode">Sortie 01</span><b id="hudName">First Light</b></div>
+    <div class="hud tr"><span id="hint">Demo flight &middot; drag back to aim</span></div>
+    <div class="hud bl">
+      <div>Heading<b id="rHead">000&deg;</b></div>
+      <div>Launch &Delta;v<b id="rDv">0.0 km/s</b></div>
+      <div>T+<b id="rT">00.0 s</b></div>
+    </div>
+    <div class="result" id="result" hidden role="status" aria-live="polite">
+      <h2 id="resTitle">Beacon reached</h2>
+      <div class="stars" id="resStars">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 2l2.9 6.6 7.1.6-5.4 4.7 1.6 7L12 17.3 5.8 20.9l1.6-7L2 9.2l7.1-.6z"/></svg>
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 2l2.9 6.6 7.1.6-5.4 4.7 1.6 7L12 17.3 5.8 20.9l1.6-7L2 9.2l7.1-.6z"/></svg>
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 2l2.9 6.6 7.1.6-5.4 4.7 1.6 7L12 17.3 5.8 20.9l1.6-7L2 9.2l7.1-.6z"/></svg>
+      </div>
+      <p id="resLine">1 shot &middot; par 1</p>
+      <div class="row"><button id="btnReplay" type="button">Fly again</button><button id="btnNext" type="button" class="primary">Next sortie</button></div>
+    </div>
+  </section>
+  <aside class="panel">
+    <div class="block">
+      <p class="label" id="lvCode">Sortie 01 of 12</p>
+      <h2 id="lvName">First Light</h2>
+      <p id="lvIdea"></p>
+      <div class="stats">
+        <div class="stat"><span>Shots</span><b id="sShots">0</b></div>
+        <div class="stat"><span>Par</span><b id="sPar">1</b></div>
+        <div class="stat"><span id="sBestL">Best</span><b id="sBest">&ndash;</b></div>
+      </div>
+    </div>
+    <div class="block aim">
+      <p class="label">Aim</p>
+      <label for="inHead">Heading<input id="inHead" type="range" min="0" max="359" step="1" value="20"><output id="oHead" for="inHead">020&deg;</output></label>
+      <label for="inPow">Power<input id="inPow" type="range" min="5" max="100" step="1" value="55"><output id="oPow" for="inPow">55%</output></label>
+      <div class="row"><button id="btnLaunch" type="button" class="primary">Launch</button><button id="btnAbort" type="button">Reset shot</button></div>
+    </div>
+    <div class="block">
+      <p class="label">Sorties</p>
+      <div class="grid" id="levelGrid"></div>
+      <div class="row"><button id="btnRestart" type="button">Restart sortie</button><button id="endless" type="button">Endless sectors</button></div>
+    </div>
+    <div class="block">
+      <p class="label">Field notes</p>
+      <ul class="notes">
+        <li><b>Gravity assist.</b> Pass behind a moving moon and you borrow some of its orbital momentum. Voyager 2 chained Jupiter, Saturn and Uranus to reach Neptune in 1989.</li>
+        <li><b>Capture radius.</b> Around a non-rotating black hole no circular orbit is stable inside three Schwarzschild radii. The real point of no return, the event horizon, sits at one. Here the dashed red ring is the capture radius: cross it and the probe is lost.</li>
+        <li><b>Integrator.</b> Flights step at a fixed 1/120 s with kick-drift-kick leapfrog, a symplectic method: orbital energy wobbles but does not drift away.</li>
+      </ul>
+      <p class="keys"><kbd>&larr;</kbd><kbd>&rarr;</kbd> heading &middot; <kbd>&uarr;</kbd><kbd>&darr;</kbd> power &middot; <kbd>Shift</kbd> coarse &middot; <kbd>Space</kbd> launch &middot; <kbd>R</kbd> reset &middot; <kbd>N</kbd> next</p>
+    </div>
+  </aside>
+</main>
+</div>
+<script>
+(()=>{
+'use strict';
+const W=1000,H=1000,DT=1/120,TMAX=24,PREV=1.5,PARC=320,EPS2=64,BR=22,WR=26,KMS=0.025,VMAX=440;
+const small=matchMedia('(max-width: 600px)').matches;
+const reduced=matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+// ---------- level data ----------
+const P=(x,y,r,gm,c=0)=>({kind:'planet',x,y,r,gm,c});
+const K=(x,y,r,gm)=>({kind:'rock',x,y,r,gm,c:0});
+const BH=(x,y,gm,cap)=>({kind:'hole',x,y,r:cap,gm,c:0});
+const O=(p,R,r,gm,ph,dir)=>({kind:'moon',orbit:{p,R,ph,dir},x:0,y:0,r,gm,c:0});
+const LEVELS=[
+ {name:'First Light',idea:'Gravity bends every shot. Aim above the planet and let its pull bring the probe down onto the beacon.',par:1,pad:[110,640],beacon:[890,640],bodies:[P(500,700,62,2.2e6,0)]},
+ {name:'The Narrows',idea:'Two worlds pull in opposite directions. Thread the gap between them and climb to a high beacon.',par:2,pad:[100,560],beacon:[900,300],bodies:[P(470,330,56,2.2e6,1),P(530,700,56,2.2e6,2)]},
+ {name:'Lunar Hook',idea:'The planet hides the beacon. Swing round the moon on the far side and come back at it.',par:2,pad:[120,820],beacon:[160,180],bodies:[P(220,500,80,2.6e6,3),K(720,420,30,1.1e6)]},
+ {name:'Figure Eight',idea:'A rock blocks the straight line between pad and beacon. Loop one twin, cross over, and loop the other.',par:3,pad:[500,650],beacon:[500,350],bodies:[P(270,500,50,2.4e6,4),P(730,500,50,2.4e6,0),K(500,500,40,2e5)]},
+ {name:'Moving Moon',idea:'This moon is in orbit. Its clock restarts at launch, and the preview already accounts for where it will move.',par:2,pad:[90,900],beacon:[900,110],bodies:[P(500,500,55,2.8e6,1),O(0,230,24,5e5,0.6,1)]},
+ {name:'Escape Burn',idea:'The pad sits on the surface and the engine cannot reach escape speed. Steal the rest from the passing moon.',par:3,vmax:270,pad:[500,432],beacon:[880,120],bodies:[P(500,500,64,3e6,2),O(0,210,26,7e5,5,1)]},
+ {name:'The Fold',idea:'Enter one mouth of the wormhole and leave the other with the same speed and heading.',par:2,pad:[100,500],beacon:[900,500],worms:[[260,240,780,760]],bodies:[P(620,170,90,2.4e6,3),P(620,500,90,2.4e6,4),P(620,830,90,2.4e6,0)]},
+ {name:'Exit Vector',idea:'The far mouth opens beside a heavy world. Pick an entry angle that leaves the probe falling toward the beacon.',par:3,pad:[120,140],beacon:[880,880],worms:[[300,330,420,820]],bodies:[P(700,650,100,3.2e6,1),K(260,600,40,6e5)]},
+ {name:'Event Horizon',idea:'A black hole pulls harder than any planet. Skim the dashed capture radius without crossing it.',par:2,pad:[100,800],beacon:[900,800],bodies:[BH(500,560,5e6,70)]},
+ {name:'Whiplash',idea:'The beacon is close but walled off. Run out to the black hole and let it whip the probe back around.',par:3,pad:[120,160],beacon:[120,440],bodies:[P(130,300,62,1.4e6,2),BH(680,320,4e6,60)]},
+ {name:'Twin Moons',idea:'Two moons circle in opposite directions. Time the crossing so neither one is in the way.',par:3,pad:[80,500],beacon:[920,500],bodies:[P(500,500,60,3e6,4),O(0,170,20,3e5,0,1),O(0,300,26,5e5,3.14159,-1)]},
+ {name:'Grand Tour',idea:'Black hole, moon and wormhole together. Every tool you have learned, one shot.',par:4,pad:[120,120],beacon:[880,880],worms:[[140,860,860,140]],bodies:[BH(500,500,4.5e6,64),O(0,220,26,6e5,1.2,1),K(820,320,36,6e5)]}
+];
+const PAL=[['#9fd0e8','#2c5f80'],['#f0c996','#8a4b2a'],['#c7e3a4','#3e6b3a'],['#e7b0b8','#7a3346'],['#d7cfee','#4a4373']];
+
+function prep(L){
+  const n=L.bodies.length;L.n=n;L.px=new Float64Array(n);L.py=new Float64Array(n);L.w=new Float64Array(n);
+  L.worms=L.worms||[];L.vmax=L.vmax||VMAX;
+  for(let i=0;i<n;i++){const b=L.bodies[i];if(b.orbit){const p=L.bodies[b.orbit.p];L.w[i]=b.orbit.dir*Math.sqrt(p.gm/(b.orbit.R**3));}}
+  place(L,0);return L;
+}
+function place(L,t){
+  const B=L.bodies;
+  for(let i=0;i<L.n;i++){const b=B[i];
+    if(b.orbit){const o=b.orbit,a=o.ph+L.w[i]*t;L.px[i]=L.px[o.p]+o.R*Math.cos(a);L.py[i]=L.py[o.p]+o.R*Math.sin(a);}
+    else{L.px[i]=b.x;L.py[i]=b.y;}}
+}
+// ---------- physics: fixed-step kick-drift-kick leapfrog ----------
+function mkState(){return{x:0,y:0,vx:0,vy:0,ax:0,ay:0,t:0,worm:-1,hit:-1,jump:0};}
+function accel(s,L){
+  place(L,s.t);let ax=0,ay=0;const B=L.bodies;
+  for(let i=0;i<L.n;i++){const dx=L.px[i]-s.x,dy=L.py[i]-s.y,d2=dx*dx+dy*dy+EPS2,inv=B[i].gm/(d2*Math.sqrt(d2));ax+=dx*inv;ay+=dy*inv;}
+  s.ax=ax;s.ay=ay;
+}
+function launch(s,L,ang,pow){
+  s.x=L.pad[0];s.y=L.pad[1];s.vx=Math.cos(ang)*pow*L.vmax;s.vy=Math.sin(ang)*pow*L.vmax;s.t=0;s.worm=-1;s.hit=-1;s.jump=0;accel(s,L);
+}
+// returns 0 flying, 1 beacon, 2 crash, 3 captured, 4 lost
+function step(s,L){
+  const h=DT*.5;s.vx+=s.ax*h;s.vy+=s.ay*h;s.x+=s.vx*DT;s.y+=s.vy*DT;s.t+=DT;
+  const Wm=L.worms;
+  for(let k=0;k<Wm.length;k++){const m=Wm[k];
+    const da=(s.x-m[0])**2+(s.y-m[1])**2,db=(s.x-m[2])**2+(s.y-m[3])**2;
+    if(s.worm===k){if(da>WR*WR&&db>WR*WR)s.worm=-1;}
+    else if(s.worm<0){
+      if(da<WR*WR){s.x+=m[2]-m[0];s.y+=m[3]-m[1];s.worm=k;s.jump++;}
+      else if(db<WR*WR){s.x+=m[0]-m[2];s.y+=m[1]-m[3];s.worm=k;s.jump++;}
+    }}
+  accel(s,L);s.vx+=s.ax*h;s.vy+=s.ay*h;
+  const B=L.bodies;
+  for(let i=0;i<L.n;i++){const dx=L.px[i]-s.x,dy=L.py[i]-s.y,r=B[i].r;if(dx*dx+dy*dy<r*r){s.hit=i;return B[i].kind==='hole'?3:2;}}
+  if((s.x-L.beacon[0])**2+(s.y-L.beacon[1])**2<BR*BR)return 1;
+  if(s.x<-260||s.x>W+260||s.y<-260||s.y>H+260||s.t>TMAX)return 4;
+  return 0;
+}
+// brute-force solver: used to seed the demo and to keep endless sectors solvable
+function solve(L,na,np,limit){
+  const s=mkState(),wins=[];
+  for(let j=np-1;j>=0;j--){const p=.3+.7*(j+1)/np;
+    for(let i=0;i<na;i++){const a=i/na*Math.PI*2;launch(s,L,a,p);let r;while((r=step(s,L))===0);
+      if(r===1){wins.push([a,p,s.t]);if(limit&&wins.length>=limit)return wins;}}}
+  return wins;
+}
+function rng(seed){let a=seed>>>0;return()=>{a=a+0x6D2B79F5|0;let t=Math.imul(a^a>>>15,1|a);t=t+Math.imul(t^t>>>7,61|t)^t;return((t^t>>>14)>>>0)/4294967296;};}
+function genSector(n){
+  for(let tries=0;tries<40;tries++){
+    const R=rng(n*7919+tries*104729+17),u=(a,b)=>a+(b-a)*R();
+    const flip=R()<.5,fx=x=>flip?W-x:x;
+    const L={name:'Sector '+n,idea:'',par:3,endless:true,pad:[fx(u(80,150)),u(140,860)],beacon:[fx(u(850,920)),u(140,860)],bodies:[],worms:[]};
+    const ok=(x,y,r)=>{if(Math.hypot(x-L.pad[0],y-L.pad[1])<r+90||Math.hypot(x-L.beacon[0],y-L.beacon[1])<r+90)return false;
+      for(const b of L.bodies)if(!b.orbit&&Math.hypot(x-b.x,y-b.y)<r+b.r+(b.ring||0)+50)return false;return true;};
+    const count=Math.min(2+Math.floor(n/2),6);let hole=n>=3&&R()<.4,moons=0;
+    for(let k=0;k<count*6&&L.bodies.length<count;k++){
+      const x=u(230,770),y=u(110,890);
+      if(hole){const cap=u(48,66);if(ok(x,y,cap+60)){L.bodies.push(BH(x,y,u(3.4e6,4.8e6),cap));hole=false;}continue;}
+      const r=u(28,78);if(!ok(x,y,r))continue;
+      const b=P(x,y,r,r*r*u(520,760),Math.floor(R()*PAL.length));L.bodies.push(b);
+      if(n>=2&&moons<2&&r>48&&R()<.45){const Ro=r+u(70,130);if(ok(x,y,Ro+20)){b.ring=Ro;L.bodies.push(O(L.bodies.length-1,Ro,u(14,22),u(2e5,5e5),u(0,6.28),R()<.5?1:-1));moons++;}}
+    }
+    if(n>=4&&R()<.45){const a=[u(220,780),u(120,880)],b=[u(220,780),u(120,880)];
+      if(Math.hypot(a[0]-b[0],a[1]-b[1])>300&&ok(a[0],a[1],40)&&ok(b[0],b[1],40))L.worms.push([a[0],a[1],b[0],b[1]]);}
+    prep(L);
+    // straight shot at the beacon must not be the easy answer
+    const s=mkState(),dir=Math.atan2(L.beacon[1]-L.pad[1],L.beacon[0]-L.pad[0]);let r,easy=0;
+    for(const p of [.5,.75,1]){launch(s,L,dir,p);while((r=step(s,L))===0);if(r===1)easy++;}
+    if(easy>1)continue;
+    if(solve(L,96,8,2).length){L.tries=tries+1;return L;}
+  }
+  return prep({name:'Sector '+n,idea:'',par:3,endless:true,pad:[110,500],beacon:[890,500],bodies:[P(500,520,70,2.6e6,1)],worms:[]});
+}
+LEVELS.forEach(prep);
+
+// ---------- persistence ----------
+const KEY='periapsis-run-v1';
+let save={stars:new Array(12).fill(0),sector:0};
+try{const j=JSON.parse(localStorage.getItem(KEY)||'null');if(j&&Array.isArray(j.stars))save={stars:LEVELS.map((_,i)=>+j.stars[i]||0),sector:+j.sector||0};}catch(e){}
+function persist(){try{localStorage.setItem(KEY,JSON.stringify(save));}catch(e){}}
+
+// ---------- DOM ----------
+const $=id=>document.getElementById(id);
+const cv=$('sky'),ctx=cv.getContext('2d'),stage=$('stage');
+const ui={head:$('inHead'),pow:$('inPow'),oHead:$('oHead'),oPow:$('oPow'),rHead:$('rHead'),rDv:$('rDv'),rT:$('rT'),hint:$('hint')};
+const grid=$('levelGrid');
+LEVELS.forEach((L,i)=>{const b=document.createElement('button');b.type='button';b.id='lv'+(i+1);
+  b.innerHTML=`${String(i+1).padStart(2,'0')}<span class="pips"><i></i><i></i><i></i></span>`;b.addEventListener('click',()=>loadLevel(i));grid.appendChild(b);});
+
+// ---------- game state ----------
+let L=LEVELS[0],li=0,sector=0,mode='demo',shots=0,aimA=-0.35,aimP=.55,demoShot=null,demoWait=0,endT=0;
+const S=mkState();
+const TRAIL=360,trX=new Float32Array(TRAIL),trY=new Float32Array(TRAIL);let trN=0,trI=0;
+const PV=Math.ceil(PREV/DT),pvX=new Float32Array(PV),pvY=new Float32Array(PV);let pvN=0,pvEnd=0;
+const PMAX=small?220:420,pX=new Float32Array(PMAX),pY=new Float32Array(PMAX),pVX=new Float32Array(PMAX),pVY=new Float32Array(PMAX),pL=new Float32Array(PMAX),pM=new Float32Array(PMAX),pC=new Uint8Array(PMAX);let pHead=0;
+const PCOL=['#ffb547','#5fe3c6','#ff6a5c','#ebe5d3'];
+let shake=0,flash=0,winFx=0;
+
+function spawn(x,y,vx,vy,life,c){const i=pHead;pHead=(pHead+1)%PMAX;pX[i]=x;pY[i]=y;pVX[i]=vx;pVY[i]=vy;pL[i]=life;pM[i]=life;pC[i]=c;}
+function burst(x,y,n,sp,c,c2){for(let k=0;k<n;k++){const a=Math.random()*6.283,v=sp*(.2+Math.random());spawn(x,y,Math.cos(a)*v,Math.sin(a)*v,.6+Math.random()*.9,k&1?c2:c);}}
+function trailReset(){trN=0;trI=0;}
+function trailPush(x,y){trX[trI]=x;trY[trI]=y;trI=(trI+1)%TRAIL;if(trN<TRAIL)trN++;}
+
+function computePreview(){
+  const s=mkState();launch(s,L,aimA,aimP);pvN=0;pvEnd=0;let r=0;
+  let arc=0;for(let k=0;k<PV&&arc<PARC;k++){const x0=s.x,y0=s.y;r=step(s,L);if(!s.jump)arc+=Math.hypot(s.x-x0,s.y-y0);pvX[pvN]=s.x;pvY[pvN]=s.y;pvN++;if(r){pvEnd=r;break;}}
+  if(s.jump)pvEnd=pvEnd||5;
+  place(L,0);
+}
+function setAim(a,p,fromInput){
+  aimA=((a%(Math.PI*2))+Math.PI*2)%(Math.PI*2);aimP=Math.max(.05,Math.min(1,p));
+  const deg=Math.round((360-aimA*180/Math.PI)%360);
+  if(!fromInput){ui.head.value=deg%360;ui.pow.value=Math.round(aimP*100);}
+  ui.oHead.textContent=String(deg%360).padStart(3,'0')+'°';ui.oPow.textContent=Math.round(aimP*100)+'%';
+  if(mode==='aim'){ui.rHead.textContent=ui.oHead.textContent;ui.rDv.textContent=(aimP*L.vmax*KMS).toFixed(1)+' km/s';computePreview();}
+}
+function headingFromDeg(d){return(360-d)*Math.PI/180;}
+
+function setLevelUI(){
+  const code=L.endless?'Sector '+String(sector).padStart(2,'0'):'Sortie '+String(li+1).padStart(2,'0');
+  $('hudCode').textContent=code;$('hudName').textContent=L.endless?'Endless':L.name;
+  $('lvCode').textContent=L.endless?`Endless · best sector ${save.sector||'–'}`:`Sortie ${String(li+1).padStart(2,'0')} of 12`;
+  $('lvName').textContent=L.endless?'Sector '+sector:L.name;
+  $('lvIdea').textContent=L.endless?'A procedurally charted sector. Every one is checked for at least one clean shot before you see it.':L.idea;
+  $('sPar').textContent=L.par;$('sShots').textContent=shots;
+  $('sBestL').textContent=L.endless?'Best':'Stars';
+  $('sBest').textContent=L.endless?(save.sector||'–'):(save.stars[li]?save.stars[li]+'/3':'–');
+  [...grid.children].forEach((b,i)=>{const open=i===0||save.stars[i-1]>0||save.stars[i]>0;b.disabled=!open;b.classList.toggle('cur',!L.endless&&i===li);
+    b.setAttribute('aria-label',`Sortie ${i+1}, ${LEVELS[i].name}${open?'':' (locked)'}, ${save.stars[i]} stars`);
+    [...b.querySelectorAll('i')].forEach((p,k)=>p.classList.toggle('on',k<save.stars[i]));});
+  $('endless').classList.toggle('cur',!!L.endless);
+  $('btnNext').textContent=L.endless?'Next sector':(li<11?'Next sortie':'Endless sectors');
+}
+function toAim(){mode='aim';place(L,0);ui.hint.textContent='Drag back to aim · release to launch';ui.rT.textContent='00.0 s';setAim(aimA,aimP);}
+function loadLevel(i){li=i;L=LEVELS[i];shots=0;hideResult();trailReset();aimA=-0.35;aimP=.55;setLevelUI();toAim();}
+function loadSector(n){sector=n;L=genSector(n);shots=0;hideResult();trailReset();setLevelUI();toAim();}
+function fire(){
+  if(mode==='demo'){mode='aim';}
+  if(mode!=='aim')return;
+  shots++;$('sShots').textContent=shots;launch(S,L,aimA,aimP);trailReset();trailPush(S.x,S.y);mode='fly';
+  ui.hint.textContent='In flight · R resets the shot';
+  burst(S.x,S.y,reduced?6:18,60,0,3);
+}
+function abort(){if(mode==='fly'||mode==='crash'){toAim();}}
+function hideResult(){const r=$('result');r.hidden=true;r.classList.remove('show');}
+function starsFor(n,par){return n<=par?3:n<=par+2?2:1;}
+function onWin(){
+  mode='won';winFx=1;flash=1;const bx=L.beacon[0],by=L.beacon[1];
+  burst(bx,by,reduced?30:small?90:150,260,1,0);
+  const st=starsFor(shots,L.par);
+  if(L.endless){if(sector>save.sector)save.sector=sector;}
+  else if(st>save.stars[li])save.stars[li]=st;
+  persist();setLevelUI();
+  $('resTitle').textContent='Beacon reached';
+  $('resLine').textContent=`${shots} shot${shots>1?'s':''} · par ${L.par} · T+${S.t.toFixed(1)} s`;
+  [...$('resStars').children].forEach((s,k)=>s.classList.toggle('on',k<st));
+  ui.hint.textContent='Beacon reached';
+  setTimeout(()=>{if(mode!=='won')return;const r=$('result');r.hidden=false;void r.offsetWidth;r.classList.add('show');$('btnNext').focus({preventScroll:true});},reduced?0:650);
+}
+function onFail(r){
+  mode='crash';endT=0;
+  if(r===2||r===3){if(!reduced)shake=r===3?10:16;burst(S.x,S.y,reduced?12:70,r===3?40:180,2,0);}
+  ui.hint.textContent=r===2?'Impact · adjust and try again':r===3?'Captured by the black hole':'Signal lost · probe left the chart';
+}
+function next(){if(L.endless)loadSector(sector+1);else if(li<11)loadLevel(li+1);else loadSector(Math.max(1,save.sector+1));}
+
+// ---------- demo ----------
+function startDemo(pre){
+  mode='demo';const s=demoShot;launch(S,L,s[0],s[1]);trailReset();trailPush(S.x,S.y);
+  let r=0;const n=Math.floor(pre/DT);for(let k=0;k<n&&!r;k++){r=step(S,L);if(k%2===0)trailPush(S.x,S.y);}
+  ui.rHead.textContent=String(Math.round((360-s[0]*180/Math.PI)%360)).padStart(3,'0')+'°';ui.rDv.textContent=(s[1]*L.vmax*KMS).toFixed(1)+' km/s';
+}
+
+// ---------- rendering ----------
+let cw=1,ch=1,dpr=1,k=1,ox=0,oy=0,stars=null;
+function resize(){
+  const r=stage.getBoundingClientRect();cw=Math.max(1,r.width);ch=Math.max(1,r.height);
+  dpr=Math.min(window.devicePixelRatio||1,small?1.5:2);cv.width=Math.round(cw*dpr);cv.height=Math.round(ch*dpr);
+  k=Math.min(cw,ch)/W*.98;ox=(cw-W*k)/2;oy=(ch-H*k)/2;
+  stars=document.createElement('canvas');stars.width=cv.width;stars.height=cv.height;const g=stars.getContext('2d');
+  const R=rng(42),n=Math.round(cw*ch/900);
+  for(let i=0;i<n;i++){const x=R()*stars.width,y=R()*stars.height,m=R();g.globalAlpha=.15+m*m*.75;g.fillStyle=m>.96?'#ffd9a8':m>.92?'#bfe4ff':'#ebe5d3';const s=(m>.97?1.6:.8)*dpr;g.fillRect(x,y,s,s);}
+  g.globalAlpha=1;
+  if(mode!=='fly')draw(0);
+}
+const X=x=>ox+x*k,Y=y=>oy+y*k;
+function drawChart(){
+  ctx.strokeStyle='rgba(127,146,158,.10)';ctx.lineWidth=1;ctx.beginPath();
+  for(let i=0;i<=10;i++){const p=i*100;ctx.moveTo(X(p),Y(0));ctx.lineTo(X(p),Y(H));ctx.moveTo(X(0),Y(p));ctx.lineTo(X(W),Y(p));}
+  ctx.stroke();
+  ctx.strokeStyle='rgba(127,146,158,.35)';ctx.strokeRect(X(0),Y(0),W*k,H*k);
+  ctx.fillStyle='rgba(127,146,158,.55)';ctx.font=`${Math.max(9,11*k*1.4)|0}px "JetBrains Mono",monospace`;
+  if(k>.45)for(let i=3;i<10;i++){ctx.fillText(String(i*100).padStart(3,'0'),X(i*100)+3,Y(H)-4);}
+}
+function drawBodies(t){
+  place(L,t);const B=L.bodies;
+  // equipotential contours and orbit tracks
+  ctx.lineWidth=1;
+  for(let i=0;i<L.n;i++){const b=B[i];
+    if(b.orbit){ctx.strokeStyle='rgba(235,229,211,.16)';ctx.setLineDash([3,6]);ctx.beginPath();ctx.arc(X(L.px[b.orbit.p]),Y(L.py[b.orbit.p]),b.orbit.R*k,0,6.283);ctx.stroke();ctx.setLineDash([]);continue;}
+    ctx.strokeStyle=b.kind==='hole'?'rgba(255,106,92,.10)':'rgba(127,146,158,.13)';
+    for(const lv of [5000,10000,20000]){const r=b.gm/lv;if(r>b.r*1.15&&r<700){ctx.beginPath();ctx.arc(X(L.px[i]),Y(L.py[i]),r*k,0,6.283);ctx.stroke();}}
+  }
+  for(let i=0;i<L.n;i++){const b=B[i],x=X(L.px[i]),y=Y(L.py[i]),r=b.r*k;
+    if(b.kind==='hole'){drawHole(x,y,b,t);continue;}
+    let c1,c2;if(b.kind==='planet'){[c1,c2]=PAL[b.c%PAL.length];}else if(b.kind==='moon'){c1='#e9e3d6';c2='#59616a';}else{c1='#b9b3a6';c2='#3d4146';}
+    const g=ctx.createRadialGradient(x-r*.4,y-r*.45,r*.1,x,y,r*1.05);g.addColorStop(0,c1);g.addColorStop(1,c2);
+    ctx.fillStyle=g;ctx.beginPath();ctx.arc(x,y,r,0,6.283);ctx.fill();
+    if(b.kind==='planet'){ctx.save();ctx.clip();ctx.globalAlpha=.16;ctx.fillStyle=c2;for(let s=-2;s<=2;s++){ctx.fillRect(x-r,y+s*r*.36-r*.07,r*2,r*.12);}ctx.restore();}
+    ctx.strokeStyle='rgba(235,229,211,.25)';ctx.beginPath();ctx.arc(x,y,r+2,-2.4,-0.6);ctx.stroke();
+  }
+}
+function drawHole(x,y,b,t){
+  const cap=b.r*k,core=cap*.32,a=performance.now()/1000*(reduced?0:.6);
+  ctx.strokeStyle='rgba(255,106,92,.75)';ctx.lineWidth=1.2;ctx.setLineDash([5,5]);ctx.beginPath();ctx.arc(x,y,cap,0,6.283);ctx.stroke();ctx.setLineDash([]);
+  ctx.save();ctx.translate(x,y);ctx.rotate(-.35);ctx.scale(1,.34);
+  for(let i=0;i<3;i++){ctx.strokeStyle=`rgba(255,${170-i*40},${80-i*20},${.55-i*.14})`;ctx.lineWidth=(6-i*1.6)/ .34*.4;ctx.beginPath();ctx.arc(0,0,core*(1.7+i*.45),a+i,a+i+5.2);ctx.stroke();}
+  ctx.restore();
+  ctx.fillStyle='#000';ctx.beginPath();ctx.arc(x,y,core,0,6.283);ctx.fill();
+  ctx.strokeStyle='rgba(255,214,150,.9)';ctx.lineWidth=1.5;ctx.beginPath();ctx.arc(x,y,core*1.08,0,6.283);ctx.stroke();
+  if(k>.5){ctx.fillStyle='rgba(255,106,92,.8)';ctx.font=`10px "JetBrains Mono",monospace`;ctx.fillText('CAPTURE',x+cap*.72,y-cap*.78);}
+}
+function drawWorms(){
+  const a=performance.now()/1000*(reduced?0:1.4);
+  L.worms.forEach((m,j)=>{const col=j?'127,214,255':'201,155,255';
+    ctx.strokeStyle=`rgba(${col},.18)`;ctx.setLineDash([2,8]);ctx.lineWidth=1;ctx.beginPath();ctx.moveTo(X(m[0]),Y(m[1]));ctx.lineTo(X(m[2]),Y(m[3]));ctx.stroke();ctx.setLineDash([]);
+    for(let e=0;e<2;e++){const x=X(m[e*2]),y=Y(m[e*2+1]),r=WR*k;
+      const g=ctx.createRadialGradient(x,y,0,x,y,r*1.3);g.addColorStop(0,'rgba(9,16,23,1)');g.addColorStop(.6,`rgba(${col},.25)`);g.addColorStop(1,`rgba(${col},0)`);
+      ctx.fillStyle=g;ctx.beginPath();ctx.arc(x,y,r*1.3,0,6.283);ctx.fill();
+      ctx.lineWidth=1.6;for(let s=0;s<3;s++){ctx.strokeStyle=`rgba(${col},${.9-s*.25})`;ctx.beginPath();const sp=(e?-a:a)+s*2.094;ctx.arc(x,y,r*(1-s*.22),sp,sp+1.7);ctx.stroke();}
+    }});
+}
+function drawBeacon(){
+  const x=X(L.beacon[0]),y=Y(L.beacon[1]),r=BR*k,ph=(performance.now()/1000*(reduced?0:.8))%1;
+  ctx.strokeStyle=`rgba(95,227,198,${.55*(1-ph)})`;ctx.lineWidth=1.5;ctx.beginPath();ctx.arc(x,y,r*(1+ph*1.6),0,6.283);ctx.stroke();
+  ctx.strokeStyle='rgba(95,227,198,.9)';ctx.beginPath();ctx.arc(x,y,r,0,6.283);ctx.stroke();
+  ctx.fillStyle='#5fe3c6';ctx.beginPath();ctx.arc(x,y,r*.28,0,6.283);ctx.fill();
+  ctx.beginPath();for(let i=0;i<4;i++){const a=i*1.5708;ctx.moveTo(x+Math.cos(a)*r*1.2,y+Math.sin(a)*r*1.2);ctx.lineTo(x+Math.cos(a)*r*1.6,y+Math.sin(a)*r*1.6);}ctx.stroke();
+  if(winFx>0){const q=1-winFx;for(let i=0;i<3;i++){const rr=r*(1+(q*9+i*1.2));ctx.strokeStyle=`rgba(95,227,198,${Math.max(0,winFx-i*.2)})`;ctx.lineWidth=3-i;ctx.beginPath();ctx.arc(x,y,rr,0,6.283);ctx.stroke();}}
+}
+function drawPad(){
+  const x=X(L.pad[0]),y=Y(L.pad[1]),r=12*k+3;
+  ctx.strokeStyle='rgba(255,181,71,.85)';ctx.lineWidth=1.5;ctx.beginPath();ctx.arc(x,y,r,0,6.283);ctx.stroke();
+  ctx.beginPath();for(let i=0;i<4;i++){const a=i*1.5708+.785;ctx.moveTo(x+Math.cos(a)*r,y+Math.sin(a)*r);ctx.lineTo(x+Math.cos(a)*r*1.6,y+Math.sin(a)*r*1.6);}ctx.stroke();
+  if(mode==='aim'){
+    const len=(30+aimP*90)*k,ex=x+Math.cos(aimA)*len,ey=y+Math.sin(aimA)*len;
+    ctx.strokeStyle='#ffb547';ctx.lineWidth=2;ctx.beginPath();ctx.moveTo(x+Math.cos(aimA)*r,y+Math.sin(aimA)*r);ctx.lineTo(ex,ey);ctx.stroke();
+    ctx.fillStyle='#ffb547';ctx.beginPath();ctx.moveTo(ex+Math.cos(aimA)*8,ey+Math.sin(aimA)*8);ctx.lineTo(ex+Math.cos(aimA+2.5)*7,ey+Math.sin(aimA+2.5)*7);ctx.lineTo(ex+Math.cos(aimA-2.5)*7,ey+Math.sin(aimA-2.5)*7);ctx.fill();
+    ctx.strokeStyle='rgba(255,181,71,.35)';ctx.lineWidth=3;ctx.beginPath();ctx.arc(x,y,r+8,aimA-aimP*Math.PI,aimA+aimP*Math.PI);ctx.stroke();
+  }
+}
+function drawPreview(){
+  if(mode!=='aim'||!pvN)return;
+  for(let i=2;i<pvN;i+=3){const f=1-i/pvN;ctx.fillStyle=`rgba(255,181,71,${.2+.7*f})`;ctx.beginPath();ctx.arc(X(pvX[i]),Y(pvY[i]),1.2+1.6*f,0,6.283);ctx.fill();}
+  if(pvEnd===2||pvEnd===3){const x=X(pvX[pvN-1]),y=Y(pvY[pvN-1]);ctx.strokeStyle='#ff6a5c';ctx.lineWidth=2;ctx.beginPath();ctx.moveTo(x-5,y-5);ctx.lineTo(x+5,y+5);ctx.moveTo(x+5,y-5);ctx.lineTo(x-5,y+5);ctx.stroke();}
+}
+function drawTrail(){
+  if(trN<2)return;const start=(trI-trN+TRAIL)%TRAIL,fade=mode==='aim'?.35:1;
+  ctx.lineCap='round';
+  for(let i=1;i<trN;i++){const a=(start+i-1)%TRAIL,b=(start+i)%TRAIL;
+    if(Math.abs(trX[a]-trX[b])>60||Math.abs(trY[a]-trY[b])>60)continue; // wormhole jump
+    const f=i/trN;ctx.strokeStyle=`rgba(255,181,71,${f*.85*fade})`;ctx.lineWidth=.6+f*2.4;ctx.beginPath();ctx.moveTo(X(trX[a]),Y(trY[a]));ctx.lineTo(X(trX[b]),Y(trY[b]));ctx.stroke();}
+  ctx.lineCap='butt';
+}
+function drawProbe(){
+  if(!(mode==='fly'||mode==='demo'||mode==='won'&&winFx>.7))return;
+  const x=X(S.x),y=Y(S.y);
+  const g=ctx.createRadialGradient(x,y,0,x,y,14);g.addColorStop(0,'rgba(255,220,160,.9)');g.addColorStop(1,'rgba(255,181,71,0)');
+  ctx.fillStyle=g;ctx.beginPath();ctx.arc(x,y,14,0,6.283);ctx.fill();
+  ctx.fillStyle='#fff3dc';ctx.beginPath();ctx.arc(x,y,3,0,6.283);ctx.fill();
+}
+function drawParticles(dt){
+  for(let i=0;i<PMAX;i++){if(pL[i]<=0)continue;pL[i]-=dt;pVX[i]*=.985;pVY[i]*=.985;pX[i]+=pVX[i]*dt;pY[i]+=pVY[i]*dt;
+    const f=Math.max(0,pL[i]/pM[i]);ctx.globalAlpha=f;ctx.fillStyle=PCOL[pC[i]];const s=1+f*2.2;ctx.fillRect(X(pX[i])-s/2,Y(pY[i])-s/2,s,s);}
+  ctx.globalAlpha=1;
+}
+let drag=null;
+function drawBand(){
+  if(!drag||!drag.on)return;
+  ctx.strokeStyle='rgba(235,229,211,.5)';ctx.setLineDash([4,4]);ctx.lineWidth=1;ctx.beginPath();ctx.moveTo(drag.x0,drag.y0);ctx.lineTo(drag.x,drag.y);ctx.stroke();ctx.setLineDash([]);
+  ctx.fillStyle='rgba(235,229,211,.8)';ctx.beginPath();ctx.arc(drag.x0,drag.y0,4,0,6.283);ctx.fill();ctx.beginPath();ctx.arc(drag.x,drag.y,7,0,6.283);ctx.stroke();
+}
+function draw(dt){
+  ctx.setTransform(1,0,0,1,0,0);ctx.fillStyle='#091017';ctx.fillRect(0,0,cv.width,cv.height);
+  ctx.drawImage(stars,0,0);
+  let sx=0,sy=0;if(shake>0){sx=(Math.random()-.5)*shake;sy=(Math.random()-.5)*shake;}
+  ctx.setTransform(dpr,0,0,dpr,sx*dpr,sy*dpr);
+  drawChart();drawWorms();drawBodies(mode==='fly'||mode==='demo'||mode==='crash'||mode==='won'?S.t:0);drawBeacon();drawPad();drawTrail();drawPreview();drawProbe();drawParticles(dt);
+  ctx.setTransform(dpr,0,0,dpr,0,0);drawBand();
+  if(flash>0){ctx.fillStyle=`rgba(95,227,198,${flash*.18})`;ctx.fillRect(0,0,cw,ch);}
+}
+
+// ---------- loop ----------
+let last=performance.now(),acc=0;
+function frame(now){
+  let dt=Math.min(.05,(now-last)/1000);last=now;
+  if(mode==='fly'||mode==='demo'&&!reduced){
+    acc+=dt;let r=0;
+    while(acc>=DT&&!r){acc-=DT;r=step(S,L);if((S.t*120|0)%2===0)trailPush(S.x,S.y);}
+    if(!reduced&&Math.random()<.7)spawn(S.x,S.y,-S.vx*.15+(Math.random()-.5)*30,-S.vy*.15+(Math.random()-.5)*30,.5,0);
+    ui.rT.textContent=S.t.toFixed(1).padStart(4,'0')+' s';
+    if(r){acc=0;if(mode==='demo'){if(r===1){winFx=1;burst(L.beacon[0],L.beacon[1],small?60:110,240,1,0);}mode='demoEnd';demoWait=1.4;}else if(r===1)onWin();else onFail(r);}
+  }else if(mode==='demoEnd'){demoWait-=dt;if(demoWait<=0)startDemo(0);}
+  else if(mode==='crash'){endT+=dt;if(endT>1.0)toAim();}
+  if(shake>0)shake=Math.max(0,shake-dt*40);
+  if(flash>0)flash=Math.max(0,flash-dt*2.5);
+  if(winFx>0)winFx=Math.max(0,winFx-dt*.8);
+  draw(dt);
+  requestAnimationFrame(frame);
+}
+
+// ---------- input ----------
+function leaveDemo(){if(mode==='demo'||mode==='demoEnd'){trailReset();toAim();return true;}return false;}
+cv.addEventListener('pointerdown',e=>{
+  if(mode==='won')return;
+  leaveDemo();if(mode!=='aim')return;
+  cv.setPointerCapture(e.pointerId);const r=cv.getBoundingClientRect();
+  drag={id:e.pointerId,x0:e.clientX-r.left,y0:e.clientY-r.top,x:e.clientX-r.left,y:e.clientY-r.top,on:false};e.preventDefault();
+});
+cv.addEventListener('pointermove',e=>{
+  if(!drag||e.pointerId!==drag.id||mode!=='aim')return;const r=cv.getBoundingClientRect();drag.x=e.clientX-r.left;drag.y=e.clientY-r.top;
+  const dx=drag.x0-drag.x,dy=drag.y0-drag.y,len=Math.hypot(dx,dy);
+  if(len>8){drag.on=true;setAim(Math.atan2(dy,dx),len/(Math.min(cw,ch)*.34));}
+});
+function endDrag(e,cancel){if(!drag||e.pointerId!==drag.id)return;const on=drag.on;drag=null;if(on&&!cancel)fire();}
+cv.addEventListener('pointerup',e=>endDrag(e,false));
+cv.addEventListener('pointercancel',e=>endDrag(e,true));
+ui.head.addEventListener('input',()=>{const v=+ui.head.value;leaveDemo();setAim(headingFromDeg(v),aimP);});
+ui.pow.addEventListener('input',()=>{const v=+ui.pow.value/100;leaveDemo();setAim(aimA,v);});
+$('btnLaunch').addEventListener('click',()=>{leaveDemo();fire();});
+$('btnAbort').addEventListener('click',()=>{if(!leaveDemo())abort();});
+$('btnRestart').addEventListener('click',()=>{if(L.endless)loadSector(sector);else loadLevel(li);});
+$('endless').addEventListener('click',()=>loadSector(Math.max(1,save.sector)));
+$('btnNext').addEventListener('click',next);
+$('btnReplay').addEventListener('click',()=>{if(L.endless)loadSector(sector);else loadLevel(li);});
+addEventListener('keydown',e=>{
+  const tg=e.target,inField=tg&&(tg.tagName==='INPUT'),onBtn=tg&&tg.tagName==='BUTTON';
+  if(e.key==='r'||e.key==='R'){if(!leaveDemo())abort();return;}
+  if(e.key==='n'||e.key==='N'){if(mode==='won')next();return;}
+  if(inField)return;
+  if((e.key===' '||e.key==='Enter')&&!onBtn){e.preventDefault();if(mode==='won')next();else{leaveDemo();fire();}return;}
+  const st=e.shiftKey?5:1;
+  if(e.key==='ArrowLeft'||e.key==='ArrowRight'){e.preventDefault();leaveDemo();if(mode==='aim')setAim(aimA+(e.key==='ArrowLeft'?-1:1)*st*Math.PI/180,aimP);}
+  if(e.key==='ArrowUp'||e.key==='ArrowDown'){e.preventDefault();leaveDemo();if(mode==='aim')setAim(aimA,aimP+(e.key==='ArrowUp'?1:-1)*st/100);}
+});
+new ResizeObserver(resize).observe(stage);
+
+// ---------- boot: level 1 with a demo probe already mid-flight ----------
+setLevelUI();
+const w=solve(L,180,6,0);
+demoShot=w.length?w[Math.floor(w.length/2)]:[-0.5,.8];
+resize();setAim(aimA,aimP);startDemo(1.6);draw(0);
+window.__sling={LEVELS,prep,solve,genSector,step,launch,mkState,get mode(){return mode},get aim(){return[aimA,aimP]},get shots(){return shots}};
+requestAnimationFrame(frame);
+})();
+</script>
+</body>
+</html>
