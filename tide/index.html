@@ -1,0 +1,347 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>Harmonic Tide Machine</title>
+<meta name="description" content="A working model of a harmonic tide-predicting machine whose brass cranks add eight tidal constituents through one wire to a pen on a moving drum.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600&family=Old+Standard+TT:wght@700&display=swap" rel="stylesheet">
+<style>
+/* Layout: title, machine canvas as hero, one control bar, readouts, then eight constituent units and a short note. */
+:root{
+  --bg:#eef2f1; --surface:#e3e9e8; --ink:#17242c; --muted:#4f5e67; --line:#c2cccf; --accent:#1d5fa6;
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){ --bg:#11171b; --surface:#182126; --ink:#dce5e8; --muted:#97a6ae; --line:#2c383e; --accent:#72abe8; color-scheme:dark }
+}
+:root[data-theme="dark"]{ --bg:#11171b; --surface:#182126; --ink:#dce5e8; --muted:#97a6ae; --line:#2c383e; --accent:#72abe8; color-scheme:dark }
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);font:15px/1.5 "IBM Plex Sans",system-ui,-apple-system,"Segoe UI",sans-serif;
+  padding-block:max(20px,env(safe-area-inset-top,0px)) max(32px,env(safe-area-inset-bottom,0px));
+  padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px))}
+.wrap{max-width:1180px;margin:0 auto;display:grid;gap:16px;min-width:0}
+h1{font:700 30px/1.15 "Old Standard TT",Georgia,"Times New Roman",serif;margin:0;text-wrap:balance}
+h2{font-size:17px;font-weight:600;margin:0 0 6px;text-wrap:balance}
+.lede{margin:4px 0 0;color:var(--muted);max-width:64ch}
+canvas{display:block;width:100%;background:var(--surface);border:1px solid var(--line);border-radius:6px}
+.bar{display:flex;flex-wrap:wrap;gap:12px 24px;align-items:center}
+.group{display:flex;flex-wrap:wrap;gap:8px;align-items:center;min-width:0}
+.lbl,label{font-size:13px;color:var(--muted)}
+button,select{font:inherit;font-size:14px;color:var(--ink);background:var(--bg);border:1px solid var(--line);border-radius:6px;min-height:40px;padding:6px 12px;cursor:pointer}
+button:hover,select:hover{border-color:var(--muted)}
+button[aria-pressed="true"]{background:var(--ink);color:var(--bg);border-color:var(--ink)}
+#run{background:var(--accent);color:var(--bg);border-color:var(--accent);font-weight:600;min-width:84px}
+:focus-visible{outline:2px solid var(--ink);outline-offset:2px}
+.hint{font-size:13px;color:var(--muted)}
+.read{display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:12px;margin:0;padding:10px 0;border-block:1px solid var(--line)}
+.read div{min-width:0}
+.read dt{font-size:13px;color:var(--muted)}
+.read dd{margin:0;font-size:18px;font-weight:500;font-variant-numeric:tabular-nums}
+#pen{color:var(--accent)}
+.units{display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:10px}
+.unit{border:1px solid var(--line);border-radius:6px;padding:10px 12px;display:grid;gap:6px;min-width:0}
+.unit.off{opacity:.6}
+.uh{display:flex;gap:8px;align-items:baseline;min-width:0}
+.uh input{width:18px;height:18px;margin:0;accent-color:var(--ink);align-self:center;flex:none}
+.uh label{color:var(--ink);font-size:14px;min-width:0;flex:1}
+.uh b{font-weight:600;margin-right:4px}
+.per{font-size:13px;color:var(--muted);font-variant-numeric:tabular-nums;white-space:nowrap}
+.row{display:grid;grid-template-columns:76px 1fr 64px;gap:8px;align-items:center;min-width:0}
+.row output{font-size:14px;font-variant-numeric:tabular-nums;text-align:right}
+input[type=range]{width:100%;min-width:0;accent-color:var(--ink);height:28px;margin:0}
+.dial{width:44px;height:44px;border-radius:50%;cursor:grab;touch-action:none;justify-self:start}
+.dial svg{display:block}
+.dial .face{fill:var(--bg);stroke:var(--line);stroke-width:1.5}
+.dial .tk{stroke:var(--muted);stroke-width:1}
+.dial .nd{stroke:var(--ink);stroke-width:2.5;stroke-linecap:round}
+.dial .hub{fill:var(--ink)}
+.note{max-width:72ch;color:var(--ink)}
+.note p{margin:0 0 8px}
+.note .small{font-size:13px;color:var(--muted)}
+@media (max-width:600px){h1{font-size:26px}.bar{gap:10px 16px}}
+</style>
+</head>
+<body>
+<div class="wrap">
+<header>
+  <h1>Harmonic Tide Machine</h1>
+  <p class="lede">Eight brass cranks, one per tidal constituent, add their motions through a single wire to a pen that inks the tide on a moving paper drum.</p>
+</header>
+<canvas id="cv" role="img" aria-label="Animated tide-predicting mechanism: eight cranks with yokes and pulleys, a wire to a pen, a paper drum showing the predicted tide with high and low water times, and a 30-day record showing spring and neap tides."></canvas>
+<section class="bar" aria-label="Machine controls">
+  <div class="group">
+    <button id="run" type="button">Pause</button>
+    <label for="speed">Speed</label>
+    <select id="speed">
+      <option value="1">1 hour per second</option>
+      <option value="6" selected>6 hours per second</option>
+      <option value="24">1 day per second</option>
+      <option value="72">3 days per second</option>
+    </select>
+  </div>
+  <div class="group" role="group" aria-label="Regime preset">
+    <span class="lbl">Preset</span>
+    <button type="button" data-p="semi" aria-pressed="false">Semi-diurnal</button>
+    <button type="button" data-p="diurnal" aria-pressed="false">Diurnal</button>
+    <button type="button" data-p="mixed" aria-pressed="true">Mixed</button>
+    <button type="button" data-p="beat" aria-pressed="false">Spring-neap beat</button>
+  </div>
+  <span class="hint">Space runs or pauses.</span>
+</section>
+<dl class="read">
+  <div><dt>Machine time</dt><dd id="clock">Day 0, 00:00</dd></div>
+  <div><dt>Pen height</dt><dd id="pen">0.00 m</dd></div>
+  <div><dt>Form factor F</dt><dd id="ff">0.00</dd></div>
+  <div><dt>Next spring tide</dt><dd id="spring">-</dd></div>
+  <div><dt>M2 and S2 beat period</dt><dd id="beat">-</dd></div>
+</dl>
+<section class="units" id="units" aria-label="Tidal constituents"></section>
+<section class="note">
+  <h2>How the machine works</h2>
+  <p>Each constituent is a cosine, height = A cos(&omega;t &minus; g), with &omega; = 360&deg; divided by its period. On the machine, a crank turns at that speed; the radius of its pin sets the amplitude A and its starting angle sets the phase g. A slotted yoke turns the pin's circle into straight up-and-down motion, and a single wire passing over a pulley on every yoke adds all the motions together and moves the pen.</p>
+  <p>M2 and S2 drift in and out of step every 1/(1/12 &minus; 1/12.4206) hours, about 14.77 days. In step they give spring tides; half a cycle later they partly cancel to give neaps. The form factor F = (K1 + O1)/(M2 + S2) classifies the result: under 0.25 semi-diurnal, 0.25 to 1.5 mixed mainly semi-diurnal, 1.5 to 3 mixed mainly diurnal, above 3 diurnal.</p>
+  <p class="small">William Thomson designed the first tide-predicting machine in 1872-73. Presets here use equilibrium-tide amplitude ratios scaled so the largest constituent is 1 m, with all phases at 0&deg;; they are not data for any port. Dial changes affect only the ink still to come, as on the real machine; a preset loads fresh paper.</p>
+</section>
+</div>
+<script>
+(()=>{
+"use strict";
+const DEG=Math.PI/180, DT=0.1, SPAN=720, N=Math.round(SPAN/DT), AMAX=1.5;
+const C=[
+  {id:"M2",T:12.4206,name:"Principal lunar semi-diurnal"},
+  {id:"S2",T:12.0000,name:"Principal solar semi-diurnal"},
+  {id:"N2",T:12.6583,name:"Larger lunar elliptic semi-diurnal"},
+  {id:"K2",T:11.9672,name:"Lunisolar semi-diurnal"},
+  {id:"K1",T:23.9345,name:"Lunisolar diurnal"},
+  {id:"O1",T:25.8193,name:"Principal lunar diurnal"},
+  {id:"P1",T:24.0659,name:"Principal solar diurnal"},
+  {id:"M4",T:6.2103,name:"Shallow-water overtide of M2"}
+];
+// Equilibrium-tide coefficients (M2 .4543, S2 .2112, N2 .0880, K2 .0576, K1 .2655, O1 .1886, P1 .0880) normalised.
+const PRE={
+  semi:   [1,.465,.194,.127,.088,.062,.029,0],
+  diurnal:[.1,.047,.019,.013,1,.71,.33,0],
+  mixed:  [1,.465,.194,.127,.584,.415,.194,0],
+  beat:   [1,.465,0,0,0,0,0,0]
+};
+for(const c of C){c.w=360/c.T;c.A=0;c.g=0;c.on=true;}
+const iM2=0,iS2=1,iK1=4,iO1=5;
+const BEAT=1/(1/C[iS2].T-1/C[iM2].T); // hours
+
+function tide(t){let s=0;for(let i=0;i<8;i++){const c=C[i];if(c.on)s+=c.A*Math.cos((c.w*t-c.g)*DEG);}return s;}
+
+// Paper record: ring buffer of pen heights sampled every DT hours.
+const buf=new Float32Array(N); let kLast=0;
+const mod=k=>((k%N)+N)%N, at=k=>buf[mod(k)];
+let t=33*24+8.4;
+function refill(){kLast=Math.floor(t/DT);for(let k=kLast-N+1;k<=kLast;k++)buf[mod(k)]=tide(k*DT);}
+function advance(){while((kLast+1)*DT<=t){kLast++;buf[mod(kLast)]=tide(kLast*DT);}}
+
+// ---------- UI ----------
+const unitsEl=document.getElementById("units");
+const presetBtns=[...document.querySelectorAll("[data-p]")];
+let dirty=true;
+function clearPreset(){for(const b of presetBtns)b.setAttribute("aria-pressed","false");}
+function fmtDeg(g){return Math.round(g)+"°";}
+C.forEach((c,i)=>{
+  const el=document.createElement("div");el.className="unit";
+  el.innerHTML=`<div class="uh"><input type="checkbox" id="on-${c.id}" checked><label for="on-${c.id}"><b>${c.id}</b>${c.name}</label><span class="per">${c.T.toFixed(4)} h</span></div>
+<div class="row"><label for="amp-${c.id}">Amplitude</label><input type="range" id="amp-${c.id}" min="0" max="${AMAX}" step="0.01" value="0"><output id="ao-${c.id}" for="amp-${c.id}">0.00 m</output></div>
+<div class="row"><span class="lbl" id="pl-${c.id}">Phase g</span><div class="dial" id="ph-${c.id}" role="slider" tabindex="0" aria-label="${c.id} phase" aria-valuemin="0" aria-valuemax="359" aria-valuenow="0"><svg viewBox="0 0 44 44" width="44" height="44" aria-hidden="true"><circle class="face" cx="22" cy="22" r="20"/>${[0,90,180,270].map(a=>`<line class="tk" x1="22" y1="3" x2="22" y2="7" transform="rotate(${a} 22 22)"/>`).join("")}<line class="nd" x1="22" y1="22" x2="22" y2="7"/><circle class="hub" cx="22" cy="22" r="3"/></svg></div><output id="po-${c.id}">0°</output></div>`;
+  unitsEl.appendChild(el);
+  c.el=el;c.chk=el.querySelector("input[type=checkbox]");c.amp=el.querySelector("input[type=range]");
+  c.ao=el.querySelector("#ao-"+c.id);c.dial=el.querySelector(".dial");c.nd=el.querySelector(".nd");c.po=el.querySelector("#po-"+c.id);
+  c.chk.addEventListener("change",()=>{c.on=c.chk.checked;el.classList.toggle("off",!c.on);clearPreset();dirty=true;});
+  c.amp.addEventListener("input",()=>{c.A=+c.amp.value;c.ao.textContent=c.A.toFixed(2)+" m";clearPreset();dirty=true;});
+  const setG=(g,user)=>{c.g=((Math.round(g)%360)+360)%360;c.nd.setAttribute("transform",`rotate(${c.g} 22 22)`);
+    c.dial.setAttribute("aria-valuenow",c.g);c.dial.setAttribute("aria-valuetext",c.g+" degrees");c.po.textContent=fmtDeg(c.g);if(user){clearPreset();dirty=true;}};
+  c.setG=setG;
+  const fromPtr=e=>{const r=c.dial.getBoundingClientRect();const a=Math.atan2(e.clientX-r.left-r.width/2,-(e.clientY-r.top-r.height/2))/DEG;setG(a,true);};
+  c.dial.addEventListener("pointerdown",e=>{try{c.dial.setPointerCapture(e.pointerId);}catch(_){}c.dial.focus({preventScroll:true});fromPtr(e);e.preventDefault();});
+  c.dial.addEventListener("pointermove",e=>{if(c.dial.hasPointerCapture(e.pointerId))fromPtr(e);});
+  c.dial.addEventListener("keydown",e=>{const s=e.shiftKey?15:1;let g=c.g;
+    if(e.key==="ArrowUp"||e.key==="ArrowRight")g+=s;else if(e.key==="ArrowDown"||e.key==="ArrowLeft")g-=s;
+    else if(e.key==="PageUp")g+=30;else if(e.key==="PageDown")g-=30;else if(e.key==="Home")g=0;else if(e.key==="End")g=359;else return;
+    e.preventDefault();setG(g,true);});
+});
+function setAmp(c,a){c.A=a;c.amp.value=a;c.ao.textContent=a.toFixed(2)+" m";}
+function applyPreset(name){
+  PRE[name].forEach((a,i)=>{const c=C[i];setAmp(c,a);c.setG(0,false);c.on=true;c.chk.checked=true;c.el.classList.remove("off");});
+  for(const b of presetBtns)b.setAttribute("aria-pressed",String(b.dataset.p===name));
+  refill();dirty=true;
+}
+for(const b of presetBtns)b.addEventListener("click",()=>applyPreset(b.dataset.p));
+
+const runBtn=document.getElementById("run"), speedSel=document.getElementById("speed");
+let running=!matchMedia("(prefers-reduced-motion: reduce)").matches;
+function setRun(r){running=r;runBtn.textContent=r?"Pause":"Run";runBtn.setAttribute("aria-label",r?"Pause the machine":"Run the machine");}
+runBtn.addEventListener("click",()=>setRun(!running));
+document.addEventListener("keydown",e=>{
+  if(e.key!==" "||e.ctrlKey||e.metaKey||e.altKey)return;
+  const tag=e.target&&e.target.tagName;
+  if(/^(INPUT|SELECT|BUTTON|TEXTAREA)$/.test(tag)||(e.target.getAttribute&&e.target.getAttribute("role")==="slider"))return;
+  e.preventDefault();setRun(!running);
+});
+const $=id=>document.getElementById(id);
+const out={clock:$("clock"),pen:$("pen"),ff:$("ff"),spring:$("spring"),beat:$("beat")};
+out.beat.textContent=(BEAT/24).toFixed(2)+" days";
+function setText(el,s){if(el.textContent!==s)el.textContent=s;}
+const p2=n=>(n<10?"0":"")+n;
+function clockStr(h){const d=Math.floor(h/24);let m=Math.round((h-d*24)*60);let dd=d;if(m>=1440){m-=1440;dd++;}return "Day "+dd+", "+p2(Math.floor(m/60))+":"+p2(m%60);}
+function hhmm(h){let m=Math.round((((h%24)+24)%24)*60)%1440;return p2(Math.floor(m/60))+":"+p2(m%60);}
+// Spring tides: M2 and S2 in step when (wS2-wM2)t = gS2-gM2 + 360k.
+function beatOk(){return C[iM2].on&&C[iS2].on&&C[iM2].A>0&&C[iS2].A>0;}
+const WD=C[iS2].w-C[iM2].w;
+function springAfter(tt,off){const g=C[iS2].g-C[iM2].g+off;const k=Math.ceil((WD*tt-g)/360);return (g+360*k)/WD;}
+
+// ---------- canvas ----------
+const cv=$("cv"), ctx=cv.getContext("2d");
+const BR="#b8913f", BRD="#7a5d24", PAPER="#f3f4ef", PEDGE="#d9ddd6", PGRID="#cbd5d8", PGRID2="#a9b7bd", PTEXT="#52626a", PINK="#1d5fa6", PDARK="#1d2a31";
+let col={};
+function readCols(){const s=getComputedStyle(document.documentElement);for(const k of ["surface","ink","muted","line","accent"])col[k]=s.getPropertyValue("--"+k).trim();dirty=true;}
+let W=0,H=0,phone=false,G={};
+const pY=new Float32Array(8);
+function layout(){
+  W=Math.max(280,cv.clientWidth||cv.parentElement.clientWidth);phone=W<600;
+  const penX=W-(phone?26:40), p=(penX-36)/8, R=Math.min(p*.38,32);
+  const cy=R+16, bushY=cy+R+9, Py0=bushY+10+.82*R+R*.27, Fy=Py0+.82*R+R*.27+R*.22+10;
+  const Mh=Fy+R*.22+(phone?20:24), Dh=phone?180:196, dTop=Mh+6, rTop=dTop+Dh+30, Oh=phone?78:84;
+  H=Math.round(rTop+Oh+24);
+  G={penX,p,R,cy,bushY,Py0,Fy,Rp:Math.max(4,R*.27),Rf:Math.max(3,R*.22),dTop,Dh,rTop,Oh,win:phone?36:72};
+  G.pph=(penX-12)/G.win;G.vs=(Dh/2-30)/2.5;G.os=(Oh/2-4)/2.5;
+  const dpr=Math.min(2,window.devicePixelRatio||1);
+  cv.style.height=H+"px";cv.width=Math.round(W*dpr);cv.height=Math.round(H*dpr);ctx.setTransform(dpr,0,0,dpr,0,0);dirty=true;
+}
+const FONT='"IBM Plex Sans",system-ui,-apple-system,"Segoe UI",sans-serif';
+function circle(x,y,r,fill,stroke,lw){ctx.beginPath();ctx.arc(x,y,r,0,Math.PI*2);if(fill){ctx.fillStyle=fill;ctx.fill();}if(stroke){ctx.strokeStyle=stroke;ctx.lineWidth=lw||1;ctx.stroke();}}
+function line(x1,y1,x2,y2){ctx.beginPath();ctx.moveTo(x1,y1);ctx.lineTo(x2,y2);ctx.stroke();}
+
+function drawMech(hNow){
+  const {penX,p,R,cy,bushY,Py0,Fy,Rp,Rf}=G, x0=12;
+  ctx.strokeStyle=col.line;ctx.lineWidth=3;line(x0,bushY,penX-24,bushY);line(x0,Fy+Rf+3,penX-24,Fy+Rf+3);
+  for(let i=0;i<8;i++){
+    const c=C[i], cx=x0+p*(i+.5), th=(c.w*t-c.g)*DEG, r=c.A/AMAX*R*.82;
+    const d=c.on?r*Math.cos(th):0, yy=cy-d, py=Py0-d; pY[i]=py;
+    ctx.globalAlpha=c.on?1:.45;
+    circle(cx,cy,R,BR,BRD,1.5);circle(cx,cy,R*.72,null,BRD,1);
+    ctx.strokeStyle=BRD;ctx.lineWidth=Math.max(1.5,R*.07);
+    for(let s=0;s<3;s++){const a=th+s*2.0944;line(cx,cy,cx+Math.sin(a)*R*.72,cy-Math.cos(a)*R*.72);}
+    circle(cx,cy,R*.13,BRD);
+    // yoke: slot bar and rod
+    ctx.strokeStyle=col.ink;ctx.lineWidth=1.5;
+    const sw=R*1.12;line(cx-sw,yy-3.5,cx+sw,yy-3.5);line(cx-sw,yy+3.5,cx+sw,yy+3.5);line(cx-sw,yy-3.5,cx-sw,yy+3.5);line(cx+sw,yy-3.5,cx+sw,yy+3.5);
+    ctx.lineWidth=2.5;line(cx,yy+3.5,cx,py);
+    circle(cx+r*Math.sin(th),cy-r*Math.cos(th),Math.max(2.5,R*.1),col.ink);
+    ctx.fillStyle=col.muted;ctx.fillRect(cx-4,bushY-4,8,8);
+    circle(cx,py,Rp,BR,BRD,1.2);circle(cx,py,1.5,BRD);
+    ctx.globalAlpha=1;
+    circle(cx+p/2,Fy,Rf,BR,BRD,1.2);circle(cx+p/2,Fy,1.2,BRD);
+    ctx.fillStyle=c.on?col.ink:col.muted;ctx.font=(phone?"500 12px ":"500 13px ")+FONT;ctx.textAlign="center";
+    ctx.fillText(c.id,cx,Fy+Rf+(phone?17:19));
+  }
+  // wire over each yoke pulley and under each fixed pulley, then over a guide to the pen
+  const Rg=Rp, gx=penX-Rg, gy=bushY, penY=G.dTop+G.Dh/2-clampH(hNow)*G.vs;
+  ctx.strokeStyle=col.ink;ctx.lineWidth=1.2;ctx.beginPath();ctx.moveTo(x0,Fy);
+  for(let i=0;i<8;i++){const cx=x0+p*(i+.5), fx=cx+p/2;
+    ctx.lineTo(cx-Rp,pY[i]);ctx.arc(cx,pY[i],Rp,Math.PI,0,false);ctx.lineTo(fx-Rf,Fy);ctx.arc(fx,Fy,Rf,Math.PI,0,true);}
+  ctx.lineTo(gx-Rg,gy);ctx.arc(gx,gy,Rg,Math.PI,0,false);ctx.lineTo(penX,penY-6);ctx.stroke();
+  ctx.fillStyle=col.muted;ctx.fillRect(x0-3,Fy-6,6,12);
+  circle(gx,gy,Rg,BR,BRD,1.2);
+}
+function clampH(h){const m=(G.Dh/2-8)/G.vs;return h>m?m:h<-m?-m:h;}
+
+function drawDrum(hNow){
+  const {penX,dTop,Dh,pph,vs,win}=G, L=12, Rr=W-12, top=dTop, bot=dTop+Dh, mid=(top+bot)/2;
+  ctx.fillStyle=PAPER;ctx.fillRect(L,top,Rr-L,Dh);
+  ctx.fillStyle=PEDGE;ctx.fillRect(L,top,Rr-L,6);ctx.fillRect(L,bot-6,Rr-L,6);
+  ctx.fillStyle=BRD;ctx.fillRect(L-6,top+10,6,Dh-20);ctx.fillRect(Rr,top+10,6,Dh-20);
+  ctx.save();ctx.beginPath();ctx.rect(L,top+6,Rr-L,Dh-12);ctx.clip();
+  ctx.lineWidth=1;
+  for(let m=-2;m<=2;m++){ctx.strokeStyle=m===0?PGRID2:PGRID;const y=mid-m*vs;line(L,y,Rr,y);}
+  ctx.font="12px "+FONT;ctx.textAlign="center";
+  const tL=t-(penX-L)/pph;
+  for(let h=Math.ceil(tL/6)*6;;h+=6){const x=penX-(t-h)*pph;if(x>Rr)break;
+    const day=((h%24)+24)%24===0;ctx.strokeStyle=day?PGRID2:PGRID;line(x,top+6,x,bot-6);
+    ctx.fillStyle=PTEXT;
+    if(x<Rr-14)ctx.fillText(day?"Day "+Math.round(h/24):p2(((h%24)+24)%24),x,bot-11);}
+  ctx.textAlign="left";ctx.fillStyle=PTEXT;
+  ctx.fillText("+2 m",L+4,mid-2*vs-4);ctx.fillText("0 m",L+4,mid-4);ctx.fillText("−2 m",L+4,mid+2*vs-4);
+  // ink
+  const kS=Math.max(kLast-N+1,Math.ceil((t-win)/DT));
+  ctx.strokeStyle=PINK;ctx.lineWidth=1.8;ctx.lineJoin="round";ctx.beginPath();
+  for(let k=kS;k<=kLast;k++){const x=penX-(t-k*DT)*pph,y=mid-clampH(at(k))*vs;k===kS?ctx.moveTo(x,y):ctx.lineTo(x,y);}
+  ctx.lineTo(penX,mid-clampH(hNow)*vs);ctx.stroke();
+  // high and low water markers
+  let lastH=-1e9,lastL=-1e9;const LW=phone?58:64;ctx.font="500 12px "+FONT;ctx.textAlign="center";
+  for(let k=kS+1;k<kLast;k++){const a=at(k-1),b=at(k),c=at(k+1);
+    const hi=b>a&&b>=c, lo=b<a&&b<=c; if(!hi&&!lo)continue;
+    const den=a-2*b+c, off=den?.5*(a-c)/den:0, tx=(k+off)*DT, hx=b-.25*(a-c)*off;
+    const x=penX-(t-tx)*pph, y=mid-clampH(hx)*vs;
+    ctx.fillStyle=PDARK;ctx.beginPath();
+    if(hi){ctx.moveTo(x,y-4);ctx.lineTo(x-4,y-10);ctx.lineTo(x+4,y-10);ctx.fill();
+      if(x-lastH>LW&&x>L+70&&x<penX-30){ctx.fillText("HW "+hhmm(tx),x,Math.max(top+20,y-14));lastH=x;}}
+    else{ctx.moveTo(x,y+4);ctx.lineTo(x-4,y+10);ctx.lineTo(x+4,y+10);ctx.fill();
+      if(x-lastL>LW&&x>L+70&&x<penX-30){ctx.fillText("LW "+hhmm(tx),x,Math.min(bot-24,y+24));lastL=x;}}
+  }
+  ctx.restore();
+  // pen rail and carriage
+  const py=mid-clampH(hNow)*vs;
+  ctx.strokeStyle="#7f8d93";ctx.lineWidth=2;line(penX+7,top+2,penX+7,bot-2);
+  ctx.fillStyle=PDARK;ctx.fillRect(penX-3,py-7,12,14);circle(penX,py,2.6,PINK);
+}
+
+function drawRecord(){
+  const {rTop,Oh,os}=G, L=12, Rr=W-12, ww=Rr-L, mid=rTop+Oh/2, t0=t-SPAN;
+  ctx.font="12px "+FONT;ctx.textAlign="left";ctx.fillStyle=col.muted;
+  ctx.fillText("Record of the last 30 days",L,rTop-10);const tw=ctx.measureText("Record of the last 30 days").width;
+  ctx.strokeStyle=col.line;ctx.lineWidth=1;line(L,mid,Rr,mid);line(L,rTop,L,rTop+Oh);
+  // spring and neap markers from M2/S2 phase agreement
+  if(beatOk()){ctx.setLineDash([3,4]);ctx.textAlign="center";
+    for(let off=0;off<=180;off+=180){let ts=springAfter(t0,off);
+      for(;ts<=t;ts+=BEAT){const x=L+(ts-t0)/SPAN*ww;ctx.strokeStyle=col.muted;line(x,rTop,x,rTop+Oh);
+        if(x>L+tw+30){ctx.fillStyle=col.ink;ctx.fillText(off?"Neap":"Spring",x,rTop-10);}}}
+    ctx.setLineDash([]);}
+  // min/max per pixel column keeps the envelope faithful
+  ctx.strokeStyle=col.accent;ctx.lineWidth=1;ctx.beginPath();
+  const kMin=kLast-N+1;
+  for(let px=0;px<ww;px++){let kA=Math.ceil((t0+px/ww*SPAN)/DT),kB=Math.floor((t0+(px+1)/ww*SPAN)/DT);
+    if(kA<kMin)kA=kMin;if(kB>kLast)kB=kLast;if(kB<kA)kB=kA;
+    let lo=1e9,hi=-1e9;for(let k=kA;k<=kB;k++){const v=at(k);if(v<lo)lo=v;if(v>hi)hi=v;}
+    const lim=(Oh/2-2)/os;hi=Math.min(hi,lim);lo=Math.max(lo,-lim);
+    ctx.moveTo(L+px+.5,mid-hi*os);ctx.lineTo(L+px+.5,mid-lo*os+.75);}
+  ctx.stroke();
+  ctx.fillStyle=col.muted;ctx.textAlign="center";
+  const step=phone?10:5;
+  for(let d=Math.ceil(t0/24/step)*step;d*24<=t;d+=step){const x=L+(d*24-t0)/SPAN*ww;ctx.fillRect(x,rTop+Oh,1,5);ctx.fillText("Day "+d,Math.min(Rr-24,Math.max(L+24,x)),rTop+Oh+18);}
+}
+
+function draw(){
+  const hNow=tide(t);
+  ctx.fillStyle=col.surface;ctx.fillRect(0,0,W,H);
+  drawMech(hNow);drawDrum(hNow);drawRecord();
+  setText(out.clock,clockStr(t));
+  setText(out.pen,(hNow>=0?"+":"−")+Math.abs(hNow).toFixed(2)+" m");
+  const num=(C[iK1].on?C[iK1].A:0)+(C[iO1].on?C[iO1].A:0), den=(C[iM2].on?C[iM2].A:0)+(C[iS2].on?C[iS2].A:0);
+  let fs;if(!den)fs=num?"Diurnal (no M2, S2)":"-";else{const F=num/den;fs=F.toFixed(2)+(F<.25?" semi-diurnal":F<1.5?" mixed, semi":F<3?" mixed, diurnal":" diurnal");}
+  setText(out.ff,fs);
+  setText(out.spring,beatOk()?clockStr(springAfter(t,0)):"Needs M2 and S2");
+}
+
+let last=performance.now();
+function frame(now){
+  const dt=Math.min(.1,(now-last)/1000);last=now;
+  if(running){t+=dt*(+speedSel.value);advance();dirty=true;}
+  if(dirty){dirty=false;draw();}
+  requestAnimationFrame(frame);
+}
+readCols();layout();applyPreset("mixed");setRun(running);draw();dirty=false;
+addEventListener("resize",layout);
+const mq=matchMedia("(prefers-color-scheme: dark)");if(mq.addEventListener)mq.addEventListener("change",readCols);
+if(document.fonts&&document.fonts.ready)document.fonts.ready.then(()=>{dirty=true;});
+requestAnimationFrame(frame);
+})();
+</script>
+</body>
+</html>
