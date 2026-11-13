@@ -18,11 +18,11 @@
   --brass: #cfa95e;      /* polished brass */
   --ivory: #ece4cf;      /* bone ivory text */
   --verdigris: #6fb3a2;  /* patina accent */
-  --garnet: #c0614f;     /* warning / selection */
+  --garnet: #d4627a;     /* warning / selection */
   --muted: #8d9a97;
   --display: "Cinzel", "Trajan Pro", Georgia, serif;
   --ui: "Jost", "Futura", "Century Gothic", "Segoe UI", sans-serif;
-  --mono: "DM Mono", ui-monospace, "Cascadia Mono", Consolas, monospace;
+  --mono: var(--ui);
 }
 * { box-sizing: border-box; }
 html { background: var(--night); }
@@ -36,7 +36,7 @@ body {
 }
 .wrap { max-width: 1240px; margin: 0 auto; display: grid; grid-template-columns: minmax(0, 1fr) 320px; gap: 28px; align-items: start; }
 header { grid-column: 1 / -1; display: flex; flex-wrap: wrap; align-items: baseline; gap: 6px 20px; border-bottom: 1px solid var(--rule); padding-block: 0 12px; }
-h1 { font: 700 clamp(22px, 3.2vw, 34px)/1.1 var(--display); letter-spacing: .08em; margin: 0; color: var(--brass); text-wrap: balance; }
+h1 { font: 700 clamp(24px, 4vw, 32px)/1.1 var(--display); letter-spacing: .08em; margin: 0; color: var(--brass); text-wrap: balance; }
 header p { margin: 0; color: var(--muted); min-width: 0; text-wrap: balance; }
 .stage { position: relative; min-width: 0; }
 #plate { display: block; width: 100%; max-width: min(100%, 82vh); aspect-ratio: 1; margin: 0 auto; touch-action: none; cursor: crosshair; border-radius: 50%; outline: none; }
@@ -44,7 +44,7 @@ header p { margin: 0; color: var(--muted); min-width: 0; text-wrap: balance; }
 #status { text-align: center; font: 13px/1.4 var(--mono); color: var(--muted); min-height: 1.4em; margin: 8px 0 0; font-variant-numeric: tabular-nums; }
 aside { display: grid; gap: 18px; min-width: 0; }
 fieldset { border: 0; border-top: 1px solid var(--rule); margin: 0; padding: 12px 0 0; display: grid; gap: 10px; min-width: 0; }
-legend { font: 500 11px/1 var(--ui); letter-spacing: .18em; text-transform: uppercase; color: var(--brass); padding: 0 8px 0 0; }
+legend { font: 500 12px/1 var(--ui); color: var(--brass); padding: 0 8px 0 0; }
 label { font-size: 13px; color: var(--muted); display: grid; gap: 4px; min-width: 0; }
 .row { display: flex; flex-wrap: wrap; gap: 8px; }
 .row > * { min-width: 0; }
@@ -77,6 +77,7 @@ kbd { font: 12px var(--mono); border: 1px solid var(--rule); border-radius: 3px;
   .wrap { grid-template-columns: minmax(0, 1fr); gap: 18px; }
   #plate { max-width: 100%; }
 }
+body { font-variant-numeric: tabular-nums; }
 </style>
 </head>
 <body>
@@ -154,7 +155,7 @@ const SCALES = [[0,2,4,7,9],[0,3,5,7,10],[0,2,3,5,7,9,10],[0,2,4,6,7,9,11],[0,2,
 const SCALE_NAMES = ["Major pentatonic","Minor pentatonic","Dorian","Lydian","Hirajoshi","Whole-tone"];
 const NAMES = ["C","C#","D","D#","E","F","F#","G","G#","A","A#","B"];
 const RINGS = 13, MAX_PLANETS = 12, MAX_VOICES = 18, LOOKAHEAD = 0.12;
-const ENAMEL = ["#e7dcc0","#6fb3a2","#c0614f","#8fa6c9","#d9a441","#a98bb8"];
+const ENAMEL = ["#e7dcc0","#6fb3a2","#d4627a","#8fa6c9","#d9a441","#a98bb8"];
 const ringAU = i => 0.6 + 0.25 * i;           // ring 0 = innermost
 const periodBeats = a => 4 * Math.pow(a, 1.5); // Kepler: 1 AU = 1 bar of 4 beats
 const MOON_T = [0, 1, Math.pow(2, 1.5), Math.pow(3, 1.5)]; // moon k steps out: T = k^1.5 beats
@@ -409,7 +410,7 @@ function drawBodies(b, now) {
     const g = cx.createRadialGradient(tmpP.x - pr * 0.35, tmpP.y - pr * 0.35, pr * 0.1, tmpP.x, tmpP.y, pr);
     g.addColorStop(0, "#fffaf0"); g.addColorStop(0.35, p.color); g.addColorStop(1, "#11191c");
     cx.fillStyle = g; cx.beginPath(); cx.arc(tmpP.x, tmpP.y, pr, 0, 7); cx.fill();
-    if (p === state.sel) { cx.strokeStyle = "#c0614f"; cx.lineWidth = 1.5; cx.beginPath(); cx.arc(tmpP.x, tmpP.y, pr + 5, 0, 7); cx.stroke(); }
+    if (p === state.sel) { cx.strokeStyle = "#d4627a"; cx.lineWidth = 1.5; cx.beginPath(); cx.arc(tmpP.x, tmpP.y, pr + 5, 0, 7); cx.stroke(); }
   }
   // pulse rings
   for (const q of pulses) {

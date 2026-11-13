@@ -7,7 +7,7 @@
 <meta name="description" content="Rain carves river valleys into a procedurally generated mountain block, one simulated droplet at a time, in live 3D.">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Atkinson+Hyperlegible:wght@400;700&family=Bricolage+Grotesque:opsz,wght@12..96,600;12..96,800&family=JetBrains+Mono:wght@400;500&display=swap">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Atkinson+Hyperlegible:wght@400;700&family=Bricolage+Grotesque:opsz,wght@12..96,600;12..96,800&display=swap">
 <style>
 /* layout: title strip; hero 3D block diagram with instrument HUD (left); control column grouped Rain / Droplet physics / View / Key (right, stacks below at 860px); field notes underneath */
 :root{
@@ -40,31 +40,30 @@
 *{box-sizing:border-box}
 body{margin:0;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px);background:var(--paper);color:var(--ink);font-family:"Atkinson Hyperlegible",system-ui,-apple-system,"Segoe UI",sans-serif;font-size:14px;line-height:1.45}
 .wrap{max-width:1480px;margin:0 auto;padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));padding-block:14px 32px}
-.mono,.num{font-family:"JetBrains Mono",ui-monospace,Consolas,monospace;font-variant-numeric:tabular-nums}
+.mono,.num{font-family:inherit;font-variant-numeric:tabular-nums}
 .top{display:flex;flex-wrap:wrap;align-items:baseline;justify-content:space-between;gap:6px 24px;padding-bottom:12px;border-bottom:1px solid var(--rule)}
 .top>*{min-width:0}
-h1{font-family:"Bricolage Grotesque","Trebuchet MS",system-ui,sans-serif;font-weight:800;font-size:clamp(30px,4.2vw,46px);letter-spacing:-.025em;line-height:.95;margin:0;text-wrap:balance}
-h1 span{color:var(--glacier)}
+h1{font-family:"Bricolage Grotesque","Trebuchet MS",system-ui,sans-serif;font-weight:800;font-size:clamp(24px, 4vw, 32px);letter-spacing:-.025em;line-height:.95;margin:0;text-wrap:balance}
 .lede{margin:0;color:var(--slate);max-width:56ch;text-wrap:pretty}
 .layout{display:grid;grid-template-columns:minmax(0,1fr) 300px;gap:18px;margin-top:16px;align-items:start}
 .layout>*{min-width:0}
-.stage{position:relative;height:clamp(440px,calc(100svh - 150px),780px);border-radius:4px;overflow:hidden;background:radial-gradient(120% 90% at 50% 18%,var(--sky-1),var(--sky-2));border:1px solid var(--rule)}
+.stage{position:relative;height:clamp(440px,calc(100svh - 150px),780px);border-radius:4px;overflow:hidden;background:#18262c;border:1px solid var(--rule)}
 #gl,#flat{position:absolute;inset:0;width:100%;height:100%;display:block;touch-action:none;cursor:grab;outline:none}
 #gl:active{cursor:grabbing}
 #flat{object-fit:contain;image-rendering:auto}
 .stage:has(#gl:focus-visible){outline:2px solid var(--glacier);outline-offset:2px}
 .hud{position:absolute;background:var(--hud-bg);color:var(--hud-ink);border-radius:3px;backdrop-filter:blur(6px);-webkit-backdrop-filter:blur(6px);pointer-events:none}
 .hud-tl{top:12px;left:12px;padding:10px 12px 10px;min-width:0;max-width:calc(100% - 24px)}
-.k{font-size:10.5px;letter-spacing:.12em;text-transform:uppercase;color:var(--slate);font-weight:700}
+.k{font-size:12px;color:var(--slate);font-weight:700}
 .k em{font-style:normal;color:var(--glacier)}
-.big{font-family:"JetBrains Mono",ui-monospace,Consolas,monospace;font-variant-numeric:tabular-nums;font-size:26px;font-weight:500;line-height:1.1;margin:2px 0 8px;letter-spacing:-.01em}
+.big{font-family:inherit;font-variant-numeric:tabular-nums;font-size:26px;font-weight:500;line-height:1.1;margin:2px 0 8px;letter-spacing:-.01em}
 .stats{display:grid;grid-template-columns:auto auto;gap:3px 16px;margin:0}
 .stats div{display:contents}
 .stats dt{font-size:11.5px;color:var(--slate)}
-.stats dd{margin:0;font-family:"JetBrains Mono",ui-monospace,Consolas,monospace;font-variant-numeric:tabular-nums;font-size:12px;text-align:right}
+.stats dd{margin:0;font-family:inherit;font-variant-numeric:tabular-nums;font-size:12px;text-align:right}
 .hud-br{right:12px;bottom:12px;padding:5px 9px;font-size:11.5px}
 .hint{position:absolute;left:12px;bottom:12px;margin:0;font-size:11.5px;color:var(--hud-ink);opacity:.75;pointer-events:none}
-.tag{position:absolute;left:0;top:0;padding:3px 8px;border-radius:2px;font-size:11px;font-weight:700;letter-spacing:.14em;text-transform:uppercase;pointer-events:none;white-space:nowrap;will-change:transform}
+.tag{position:absolute;left:0;top:0;padding:3px 8px;border-radius:2px;font-size:12px;font-weight:700;pointer-events:none;white-space:nowrap;will-change:transform}
 #lblBefore{background:#f2e3b3;color:#2a2210}
 #lblAfter{background:var(--glacier);color:var(--on-accent)}
 .glmsg{position:absolute;left:12px;right:12px;top:auto;bottom:44px;margin:0;padding:8px 10px;background:var(--hud-bg);border-radius:3px;font-size:12.5px}
@@ -72,7 +71,7 @@ h1 span{color:var(--glacier)}
 .controls{display:flex;flex-direction:column;gap:14px}
 .grp{border-top:1px solid var(--rule);padding-top:10px;display:flex;flex-direction:column;gap:10px}
 .grp:first-child{border-top:0;padding-top:0}
-.grp h2{margin:0;font-size:11px;letter-spacing:.14em;text-transform:uppercase;color:var(--slate);font-weight:700}
+.grp h2{margin:0;font-size:12px;color:var(--slate);font-weight:700}
 .row{display:flex;gap:8px;flex-wrap:wrap}
 .btn{font:inherit;font-weight:700;font-size:13px;padding:8px 12px;border-radius:3px;border:1px solid var(--rule);background:var(--panel);color:var(--ink);cursor:pointer;min-height:36px;display:inline-flex;align-items:center;gap:8px}
 .btn:hover{border-color:var(--slate)}
@@ -81,13 +80,13 @@ h1 span{color:var(--glacier)}
 .btn[aria-pressed]{flex:1 1 130px;justify-content:space-between}
 .btn[aria-pressed] .led{width:9px;height:9px;border-radius:50%;border:1.5px solid var(--slate);flex:none}
 .btn[aria-pressed="true"] .led{background:var(--lichen);border-color:var(--lichen)}
-.btn kbd{font-family:"JetBrains Mono",ui-monospace,Consolas,monospace;font-size:10.5px;font-weight:400;opacity:.7;border:1px solid currentColor;border-radius:2px;padding:0 4px}
+.btn kbd{font-family:inherit;font-size:11px;font-weight:400;opacity:.7;border:1px solid currentColor;border-radius:2px;padding:0 4px}
 .btn:disabled{opacity:.6;cursor:progress}
 :focus-visible{outline:2px solid var(--glacier);outline-offset:2px}
 .seedline{display:flex;justify-content:space-between;font-size:12px;color:var(--slate)}
 .ctl{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:2px 8px;align-items:baseline}
 .ctl label{font-weight:700;font-size:13px}
-.ctl output{font-family:"JetBrains Mono",ui-monospace,Consolas,monospace;font-variant-numeric:tabular-nums;font-size:12px;color:var(--glacier)}
+.ctl output{font-family:inherit;font-variant-numeric:tabular-nums;font-size:12px;color:var(--glacier)}
 .ctl small{grid-column:1 / -1;color:var(--slate);font-size:11.5px;line-height:1.35}
 .ctl input{grid-column:1 / -1}
 input[type=range]{-webkit-appearance:none;appearance:none;width:100%;height:24px;background:transparent;margin:0;cursor:pointer;touch-action:pan-y}
@@ -106,7 +105,7 @@ input[type=range]::-moz-range-thumb{width:12px;height:12px;border-radius:50%;bac
 .notes p{margin:0 0 8px;color:var(--slate);text-wrap:pretty}
 .notes p b{color:var(--ink)}
 .keys{margin:0;padding:0;list-style:none;display:grid;grid-template-columns:auto 1fr;gap:4px 10px;font-size:13px;color:var(--slate)}
-.keys kbd{font-family:"JetBrains Mono",ui-monospace,Consolas,monospace;font-size:11.5px;color:var(--ink);border:1px solid var(--rule);border-bottom-width:2px;border-radius:3px;padding:0 5px;justify-self:start}
+.keys kbd{font-family:inherit;font-size:11.5px;color:var(--ink);border:1px solid var(--rule);border-bottom-width:2px;border-radius:3px;padding:0 5px;justify-self:start}
 @media (max-width:860px){
   .layout{grid-template-columns:minmax(0,1fr)}
   .stage{height:clamp(340px,62svh,560px)}
@@ -121,16 +120,17 @@ input[type=range]::-moz-range-thumb{width:12px;height:12px;border-radius:50%;bac
   .hud-tl{padding:8px 10px}
   .stats{gap:1px 12px}
   .hint{display:none}
-  .hud-br{font-size:10.5px}
+  .hud-br{font-size:11px}
 }
 @media (prefers-reduced-motion: reduce){*{scroll-behavior:auto}}
+body { font-variant-numeric: tabular-nums; }
 </style>
 </head>
 <body>
 
 <div class="wrap">
   <header class="top">
-    <h1>Rain <span>Carver</span></h1>
+    <h1>Rain Carver</h1>
     <p class="lede">Rain falls one droplet at a time on a 12.8 km block of new mountains. Each droplet scours, carries and drops sediment, and valleys emerge from the sum.</p>
   </header>
 

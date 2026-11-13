@@ -20,7 +20,7 @@
   --agar:#231D12;
   --display:"Instrument Serif","Iowan Old Style",Georgia,serif;
   --ui:"Figtree",system-ui,-apple-system,"Segoe UI",sans-serif;
-  --mono:"Martian Mono",ui-monospace,"SF Mono",Consolas,monospace;
+  --mono: var(--ui);
 }
 @media (prefers-color-scheme:dark){:root:not([data-theme="light"]){
   --bench:#0E1117; --panel:#161A22; --raised:#222833; --well:#0E1117;
@@ -51,7 +51,7 @@ body{background:var(--bench);color:var(--ink);font-family:var(--ui);font-size:15
 @media (max-width:880px){.plate{position:static}}
 .dish{position:relative;width:100%;max-width:620px;border-radius:50%;padding:2.4%;
   background:linear-gradient(150deg,var(--glass-hi),var(--glass-lo) 42%,var(--glass-lo) 62%,var(--glass-hi));
-  box-shadow:0 30px 60px -24px var(--shadow),0 3px 10px var(--shadow-soft),inset 0 0 0 1px var(--glass-hi)}
+  box-shadow:inset 0 0 0 1px var(--glass-hi)}
 .dish canvas{display:block;width:100%;height:auto;border-radius:50%;background:var(--agar);touch-action:none;cursor:crosshair}
 .glass{position:absolute;inset:2.4%;border-radius:50%;pointer-events:none;
   background:radial-gradient(circle at 50% 50%,transparent 60%,rgba(0,0,0,.38) 100%),radial-gradient(ellipse 38% 20% at 32% 16%,rgba(255,255,255,.12),transparent 70%);
@@ -59,21 +59,21 @@ body{background:var(--bench);color:var(--ink);font-family:var(--ui);font-size:15
 .hint{position:absolute;left:50%;bottom:13%;transform:translateX(-50%);white-space:nowrap;font:500 .66rem/1 var(--mono);letter-spacing:.04em;color:#F3E3A6;background:rgba(18,14,6,.8);padding:8px 12px;border-radius:999px;pointer-events:none;transition:opacity .5s}
 .hint.gone{opacity:0}
 .platelabel,.readout{margin:0;font:400 .66rem/1.6 var(--mono);letter-spacing:.06em;color:var(--muted);text-align:center;font-variant-numeric:tabular-nums}
-.platelabel{text-transform:uppercase}
+.platelabel{}
 
 /* ---------- the notebook ---------- */
 .notebook{background:var(--panel);border:1px solid var(--line);border-radius:16px;padding:clamp(20px,3vw,30px);min-width:0;display:grid}
-.eyebrow{margin:0;font-size:.7rem;font-weight:700;letter-spacing:.16em;text-transform:uppercase;color:var(--accent-ink)}
-h1{font-family:var(--display);font-weight:400;font-size:clamp(2.3rem,4.4vw,3.1rem);line-height:1;letter-spacing:-.01em;margin:.35rem 0 .7rem;text-wrap:balance}
+.eyebrow{margin:0;font-size:.7rem;font-weight:700;color:var(--accent-ink)}
+h1{font-family:var(--display);font-weight:400;font-size:clamp(24px, 4vw, 32px);line-height:1;letter-spacing:-.01em;margin:.35rem 0 .7rem;text-wrap:balance}
 .lede{margin:0 0 18px;color:var(--ink-soft);font-size:1rem;max-width:46ch}
 .group{display:grid;gap:10px;padding-block:18px;border-top:1px solid var(--line)}
 .group:last-child{padding-bottom:0}
-.glabel{font-size:.68rem;font-weight:700;letter-spacing:.14em;text-transform:uppercase;color:var(--muted)}
+.glabel{font-size:.68rem;font-weight:700;color:var(--muted)}
 .help{margin:0;font-size:.85rem;color:var(--muted);min-height:2.6em}
 button{font:inherit;color:inherit}
 .seg{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:4px;background:var(--well);padding:4px;border-radius:11px;border:1px solid var(--line)}
 .segbtn{appearance:none;border:0;background:transparent;color:var(--ink-soft);font-weight:600;font-size:.9rem;padding:10px 6px;border-radius:8px;display:flex;align-items:center;justify-content:center;gap:7px;cursor:pointer;min-width:0}
-.segbtn[aria-pressed="true"]{background:var(--raised);color:var(--ink);box-shadow:0 1px 3px var(--shadow-soft),0 0 0 1px var(--line)}
+.segbtn[aria-pressed="true"]{background:var(--raised);color:var(--ink);box-shadow:none}
 .sw{width:11px;height:11px;border-radius:50%;flex:none}
 .sw-oat{background:var(--oat);box-shadow:inset 0 0 0 1px rgba(90,70,20,.35)}
 .sw-salt{background:var(--salt);box-shadow:inset 0 0 0 1px var(--muted)}
@@ -99,8 +99,9 @@ button:focus-visible,input:focus-visible{outline:2px solid var(--accent-ink);out
 .how h2{font-size:.95rem;font-weight:600;margin:0}
 .how p{margin:0;font-size:.88rem;color:var(--ink-soft);max-width:62ch}
 @media (prefers-reduced-motion:reduce){.hint{transition:none}}
+body { font-variant-numeric: tabular-nums; }
 </style>
-<style>:root{padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}body{margin:0;font:14px -apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif}</style>
+<style>:root{padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}body{margin:0}</style>
 </head>
 <body>
 <main class="lab">
@@ -116,8 +117,7 @@ button:focus-visible,input:focus-visible{outline:2px solid var(--accent-ink);out
 
   <div class="notebook">
     <header>
-      <p class="eyebrow">Specimen 01 · slime mold</p>
-      <h1><i>Physarum polycephalum</i></h1>
+      <h1>Physarum polycephalum</h1>
       <p class="lede">A single cell with no brain that still finds short routes between food. Drop oats, wall it off with salt, and watch the network rewire itself.</p>
     </header>
 

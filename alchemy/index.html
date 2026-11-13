@@ -7,7 +7,7 @@
 <meta name="description" content="A falling-sand chemistry sandbox where 21 materials fall, flow, burn, melt, dissolve and explode across a live temperature field.">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@500;700&family=Karla:wght@400;600;700&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@500;700&family=Karla:wght@400;600;700&display=swap" rel="stylesheet">
 <style>
 /* Layout: masthead, then the sand bench (hero canvas + readout + transport) beside a reagent cabinet; stacks on phones. Single visual world: a dim alchemist's bench lit by brass and verdigris. */
 :root{
@@ -18,10 +18,10 @@
   --dim:#94a29c;        /* secondary text, lichen grey */
   --brass:#d1a75b;      /* instrument brass, the accent */
   --verdigris:#6db5a2;  /* oxidised copper, second accent */
-  --ember:#e9713f;      /* heat */
+  --ember:#f0a23a;      /* heat */
   --f-display:"Cinzel","Trajan Pro",Georgia,"Times New Roman",serif;
   --f-ui:"Karla","Segoe UI","Helvetica Neue",sans-serif;
-  --f-mono:"JetBrains Mono",ui-monospace,Consolas,"Courier New",monospace;
+  --f-mono:var(--f-ui);
   color-scheme:dark;
 }
 *{box-sizing:border-box}
@@ -30,7 +30,7 @@ body{margin:0;background:var(--ink);color:var(--vellum);font:15px/1.45 var(--f-u
   padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}
 .wrap{max-width:1320px;margin:0 auto;padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));padding-block:14px 20px}
 .mast{display:flex;align-items:baseline;gap:6px 18px;flex-wrap:wrap;padding-bottom:10px;border-bottom:1px solid var(--line);margin-bottom:14px}
-.mast h1{font:700 clamp(22px,3vw,30px)/1.05 var(--f-display);letter-spacing:.14em;margin:0;color:var(--brass);text-wrap:balance}
+.mast h1{font:700 clamp(24px, 4vw, 32px)/1.05 var(--f-display);letter-spacing:.14em;margin:0;color:var(--brass);text-wrap:balance}
 .mast p{margin:0;color:var(--dim);min-width:0;flex:1 1 300px;text-wrap:pretty}
 .bench{display:grid;grid-template-columns:minmax(0,1fr) 292px;gap:16px;align-items:start}
 .stage{min-width:0;display:flex;flex-direction:column;gap:10px}
@@ -47,13 +47,13 @@ button,select{font:600 13px/1 var(--f-ui);color:var(--vellum);background:var(--s
 button:hover,select:hover{border-color:color-mix(in srgb,var(--line) 60%,var(--verdigris))}
 button[aria-pressed="true"]{border-color:var(--brass);color:var(--brass)}
 :focus-visible{outline:2px solid var(--verdigris);outline-offset:2px}
-.field{display:flex;align-items:center;gap:8px;font-size:12px;color:var(--dim);text-transform:uppercase;letter-spacing:.09em;font-weight:700}
+.field{display:flex;align-items:center;gap:8px;font-size:12px;color:var(--dim);font-weight:700}
 .field input[type=range]{width:110px;accent-color:var(--brass)}
 .field output{font:600 12px var(--f-mono);color:var(--vellum);min-width:2ch;font-variant-numeric:tabular-nums;letter-spacing:0}
 .field input[type=checkbox]{accent-color:var(--brass);width:16px;height:16px;margin:0}
 .sep{flex:1 1 0}
 .cabinet{min-width:0;background:var(--slate);border:1px solid var(--line);border-radius:3px;padding:12px 12px 14px;display:flex;flex-direction:column;gap:12px}
-.grp h2{margin:0 0 6px;font:700 11px/1 var(--f-ui);letter-spacing:.16em;text-transform:uppercase;color:var(--verdigris)}
+.grp h2{margin:0 0 6px;font:700 12px/1 var(--f-ui);color:var(--verdigris)}
 .swatches{display:grid;grid-template-columns:repeat(auto-fill,minmax(112px,1fr));gap:5px}
 .sw{display:flex;align-items:center;gap:7px;padding:6px 7px;font-weight:600;font-size:12.5px;background:color-mix(in srgb,var(--slate) 60%,var(--ink));text-align:left;min-width:0}
 .sw i{flex:none;width:14px;height:14px;border-radius:2px;box-shadow:0 0 0 1px color-mix(in srgb,var(--ink) 55%,transparent) inset}
@@ -68,6 +68,7 @@ kbd{font:600 11px var(--f-mono);border:1px solid var(--line);border-bottom-width
 @media (max-width:900px){.bench{grid-template-columns:minmax(0,1fr)}}
 @media (max-width:600px){.field input[type=range]{width:90px}.sep{display:none}.mast p{font-size:13.5px}}
 @media (prefers-reduced-motion:reduce){.frame.jolt{animation:none}}
+body { font-variant-numeric: tabular-nums; }
 </style>
 </head>
 <body>
