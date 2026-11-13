@@ -1,0 +1,496 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>Aurora Engine</title>
+<meta name="description" content="A real-time aurora borealis simulator over a frozen arctic lake, driven by the Kp index, solar wind speed and the direction of the interplanetary magnetic field.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,600&family=IBM+Plex+Sans:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+/* Layout: title row, then the night-sky canvas as hero with a compact control column (stacked under it on phones). */
+:root {
+  --night: #0a1017;
+  --panel: #111a24;
+  --line: #233142;
+  --ink: #dce5ee;
+  --muted: #94a4b5;
+  --accent: #8fdcb0;
+  color-scheme: dark;
+}
+* { box-sizing: border-box; }
+html { -webkit-text-size-adjust: 100%; }
+body {
+  margin: 0;
+  background: var(--night);
+  color: var(--ink);
+  font: 400 14px/1.5 "IBM Plex Sans", "Segoe UI", system-ui, sans-serif;
+  padding-block: max(20px, env(safe-area-inset-top, 0px)) max(24px, env(safe-area-inset-bottom, 0px));
+  padding-left: max(16px, env(safe-area-inset-left, 0px));
+  padding-right: max(16px, env(safe-area-inset-right, 0px));
+}
+.wrap { max-width: 1320px; margin: 0 auto; display: grid; gap: 16px; }
+header { display: flex; flex-wrap: wrap; align-items: baseline; gap: 6px 20px; min-width: 0; }
+h1 {
+  margin: 0;
+  font: 600 30px/1.1 "Bricolage Grotesque", "Trebuchet MS", sans-serif;
+  color: var(--ink);
+  text-wrap: balance;
+}
+header p { margin: 0; color: var(--muted); max-width: 62ch; min-width: 0; }
+main { display: grid; grid-template-columns: minmax(0, 1fr) 300px; gap: 16px; align-items: stretch; }
+.stage { position: relative; min-width: 0; border: 1px solid var(--line); border-radius: 6px; overflow: hidden; background: #03060a; display: flex; }
+canvas#sky { display: block; width: 100%; flex: 1 1 auto; height: auto; min-height: clamp(380px, 64vh, 700px); touch-action: none; cursor: grab; }
+canvas#sky:active { cursor: grabbing; }
+.hud { position: absolute; left: 12px; bottom: 10px; right: 12px; display: flex; flex-wrap: wrap; gap: 4px 18px; pointer-events: none; color: var(--ink); font-size: 13px; }
+.hud span { font-variant-numeric: tabular-nums; }
+aside { display: grid; gap: 12px; min-width: 0; align-content: start; }
+section.group { background: var(--panel); border: 1px solid var(--line); border-radius: 6px; padding: 14px; display: grid; gap: 12px; min-width: 0; }
+h2 { margin: 0; font-size: 14px; font-weight: 600; color: var(--ink); }
+.field { display: grid; gap: 4px; min-width: 0; }
+.field .row { display: flex; justify-content: space-between; gap: 8px; font-size: 13px; }
+.field label, .field .lbl { color: var(--muted); }
+output, .val { font-variant-numeric: tabular-nums; color: var(--accent); font-weight: 500; }
+input[type=range] { width: 100%; margin: 4px 0; accent-color: var(--ink); height: 24px; }
+.seg { display: grid; grid-template-columns: 1fr 1fr; border: 1px solid var(--line); border-radius: 5px; overflow: hidden; }
+.seg button { border: 0; border-radius: 0; background: transparent; }
+.seg button + button { border-left: 1px solid var(--line); }
+.seg button[aria-pressed="true"] { background: var(--line); color: var(--ink); }
+button {
+  font: 500 13px/1 "IBM Plex Sans", "Segoe UI", system-ui, sans-serif;
+  color: var(--ink);
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: 5px;
+  padding: 10px 12px;
+  min-height: 38px;
+  cursor: pointer;
+}
+button:hover { background: #18232f; }
+.btns { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+button#substorm { background: var(--accent); color: #07140d; border-color: var(--accent); }
+button#substorm:hover { background: #a4e6c0; }
+:focus-visible { outline: 2px solid var(--ink); outline-offset: 2px; }
+canvas#sky:focus-visible { outline-offset: -3px; }
+dl.read { margin: 0; display: grid; grid-template-columns: auto 1fr; gap: 6px 12px; font-size: 13px; }
+dl.read dt { color: var(--muted); }
+dl.read dd { margin: 0; text-align: right; font-variant-numeric: tabular-nums; color: var(--accent); min-width: 0; }
+ul.legend { list-style: none; margin: 0; padding: 0; display: grid; gap: 8px; font-size: 13px; }
+ul.legend li { display: grid; grid-template-columns: 12px 1fr; gap: 10px; align-items: start; }
+ul.legend i { width: 12px; height: 28px; border-radius: 2px; display: block; margin-top: 2px; }
+.legend-row ul.legend { grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 12px 24px; }
+ul.legend b { font-weight: 500; font-variant-numeric: tabular-nums; }
+ul.legend span { color: var(--muted); display: block; }
+.note, .hint { margin: 0; color: var(--muted); font-size: 13px; }
+@media (max-width: 900px) {
+  main { grid-template-columns: minmax(0, 1fr); }
+  aside { grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); }
+  canvas#sky { min-height: clamp(380px, 64vh, 640px); }
+  h1 { font-size: 26px; }
+}
+@media (max-width: 480px) { .hud { font-size: 12px; } }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <h1>Aurora Engine</h1>
+    <p>Northern lights over a frozen lake at 60° geomagnetic latitude. Set the space weather and watch the oval move, brighten and break into rays.</p>
+  </header>
+  <main>
+    <div class="stage">
+      <canvas id="sky" tabindex="0" aria-label="Night sky over a frozen lake. Drag or use the arrow keys to look around."></canvas>
+      <div class="hud" aria-hidden="true">
+        <span id="hudDir">Facing north</span>
+        <span id="hudClock">00:00 elapsed</span>
+        <span id="hudPhase">Quiet arc</span>
+      </div>
+    </div>
+    <aside>
+      <section class="group" aria-labelledby="gWeather">
+        <h2 id="gWeather">Space weather</h2>
+        <div class="field">
+          <div class="row"><label for="kp">Kp index</label><output id="kpOut" for="kp">3</output></div>
+          <input id="kp" type="range" min="0" max="27" step="1" value="9">
+        </div>
+        <div class="field">
+          <div class="row"><label for="wind">Solar wind speed</label><output id="windOut" for="wind">450 km/s</output></div>
+          <input id="wind" type="range" min="250" max="1000" step="10" value="450">
+        </div>
+        <div class="field">
+          <div class="row"><span class="lbl" id="bzLbl">IMF Bz</span><span class="val" id="bzOut">−5 nT</span></div>
+          <div class="seg" role="group" aria-labelledby="bzLbl">
+            <button id="bzN" type="button" aria-pressed="false">Northward</button>
+            <button id="bzS" type="button" aria-pressed="true">Southward</button>
+          </div>
+        </div>
+      </section>
+      <section class="group" aria-labelledby="gTime">
+        <h2 id="gTime">Time</h2>
+        <div class="field">
+          <div class="row"><label for="lapse">Time-lapse</label><output id="lapseOut" for="lapse">20×</output></div>
+          <input id="lapse" type="range" min="1" max="120" step="1" value="20">
+        </div>
+        <div class="btns">
+          <button id="pause" type="button" aria-pressed="false">Pause</button>
+          <button id="substorm" type="button">Trigger substorm</button>
+        </div>
+        <p class="hint">Drag the sky to look around. Arrow keys pan, Space pauses, S starts a substorm, B flips Bz.</p>
+      </section>
+      <section class="group" aria-labelledby="gRead">
+        <h2 id="gRead">Readouts</h2>
+        <dl class="read">
+          <dt>Kp</dt><dd id="rKp">3, quiet</dd>
+          <dt>Oval edge</dt><dd id="rLat">60.4° geomag.</dd>
+          <dt>Main arc</dt><dd id="rArc">27° above north</dd>
+          <dt>Substorm</dt><dd id="rSub">0%</dd>
+        </dl>
+      </section>
+    </aside>
+  </main>
+  <section class="group legend-row" aria-labelledby="gLegend">
+    <h2 id="gLegend">Emission by altitude</h2>
+    <ul class="legend">
+      <li><i style="background:#e8484c"></i><div><b>630.0 nm, atomic oxygen</b><span>Red, above about 200 km</span></div></li>
+      <li><i style="background:#5fe08a"></i><div><b>557.7 nm, atomic oxygen</b><span>Green, about 100 to 200 km</span></div></li>
+      <li><i style="background:#5b86ec"></i><div><b>427.8 nm, nitrogen ion N₂⁺</b><span>Blue lower fringe, 90 to 100 km</span></div></li>
+    </ul>
+    <p class="note">The red oxygen state takes about 110 s to radiate, so below about 200 km collisions quench it first. The green state radiates in under a second and survives down to about 100 km.</p>
+  </section>
+</div>
+<script>
+(function () {
+  "use strict";
+  var R = 6371, OBS = 60, KM_PER_DEG = 111.2;
+  var cv = document.getElementById("sky");
+  var mobile = matchMedia("(max-width: 600px)").matches;
+  var reduced = matchMedia("(prefers-reduced-motion: reduce)").matches;
+  var $ = function (id) { return document.getElementById(id); };
+
+  var S = {
+    kp3: 9, wind: 450, south: true, lapse: 20, paused: reduced,
+    yaw: 0, pitch: mobile ? 0.36 : 0.30,
+    t: 0, fold: 0, ray: 0, onset: -1e9, nextAuto: 1e9
+  };
+  // first frame: a substorm already near its peak
+  S.onset = -260;
+
+  function kp() { return S.kp3 / 3; }
+  function kpText(k3) {
+    var n = Math.round(k3 / 3), r = k3 - n * 3;
+    return n + (r > 0 ? "+" : r < 0 ? "−" : "");
+  }
+  // NOAA-style approximation: equatorward edge of the nightside oval, 66.5 deg at Kp 0 to 48.1 deg at Kp 9
+  function edgeLat() { return 66.5 - 2.045 * kp(); }
+  function subEnv() {
+    var a = S.t - S.onset;
+    if (a < 0) return 0;
+    if (a < 180) { var x = a / 180; return x * x * (3 - 2 * x); }
+    return Math.exp(-(a - 180) / 1100);
+  }
+  // elevation (deg) of a point at altitude h km seen across ground distance d km on a spherical Earth
+  function elev(d, h) {
+    var th = Math.abs(d) / R;
+    return Math.atan2((R + h) * Math.cos(th) - R, (R + h) * Math.sin(th)) * 180 / Math.PI;
+  }
+
+  var VS = "attribute vec2 p;void main(){gl_Position=vec4(p,0.,1.);}";
+  var FS = [
+    "precision highp float;",
+    "uniform vec2 uRes;uniform vec3 uF,uR,uU;uniform vec2 uTan;",
+    "uniform float uY0,uW,uInt,uSub,uFold,uRay,uKp,uSeed;uniform int uN;uniform vec3 uAmb;",
+    "const float R=6371.;",
+    "float h12(vec2 p){p=fract(p*vec2(123.34,456.21));p+=dot(p,p+45.32);return fract(p.x*p.y);}",
+    "float h13(vec3 p){p=fract(p*0.1031);p+=dot(p,p.zyx+31.32);return fract((p.x+p.y)*p.z);}",
+    "float n2(vec2 p){vec2 i=floor(p),f=fract(p);f=f*f*(3.-2.*f);",
+    " return mix(mix(h12(i),h12(i+vec2(1,0)),f.x),mix(h12(i+vec2(0,1)),h12(i+vec2(1,1)),f.x),f.y);}",
+    "float fb(vec2 p){return .55*n2(p)+.3*n2(p*2.1+7.3)+.15*n2(p*4.3+1.7);}",
+    "vec3 GREEN=vec3(.16,1.,.38),RED=vec3(1.,.1,.12),BLUE=vec3(.3,.36,1.),PINK=vec3(1.,.25,.6);",
+    "float curtain(float e,float yf,float k,float off,float wt){",
+    " float yc=uY0+off+110.*(n2(vec2(e*.0016+k*7.1,uFold*.6+k*3.))-.5)+34.*(n2(vec2(e*.0062+k*2.3,uFold*1.4))-.5);",
+    " float d=(yf-yc)/(14.+5.*k);",
+    " if(abs(d)>3.) return 0.;",
+    " float r=n2(vec2(e*.055+k*13.,uRay));float r2=n2(vec2(e*.21+k*5.,uRay*1.7));",
+    " float rays=mix(1.,.15+1.7*r*r+.6*r2*r2,.45+.55*uSub);",
+    " float edge=d<0.?exp(-d*d*1.6):exp(-d*d*.6);",
+    " return edge*rays*wt;}",
+    "vec3 aurora(vec3 dir,float jit){",
+    " float e=dir.z;if(e<=0.) return vec3(0.);",
+    " float Re=R*e;",
+    " float s0=-Re+sqrt(Re*Re+2.*R*85.+85.*85.);",
+    " float s1=-Re+sqrt(Re*Re+2.*R*400.+400.*400.);",
+    " float B=uW+420.;",
+    " if(abs(dir.y)>.02){float a=(uY0-B)/dir.y,b2=(uY0+B)/dir.y;float lo=max(min(a,b2),s0),hi=min(max(a,b2),s1);if(hi<=lo) return vec3(0.);s0=lo;s1=hi;}",
+    " float ds=(s1-s0)/float(uN);vec3 acc=vec3(0.);",
+    " float hb=106.-uKp*.9-12.*uSub;",
+    " for(int i=0;i<64;i++){ if(i>=uN) break;",
+    "  float s=s0+(float(i)+jit)*ds;vec3 q=dir*s+vec3(0.,0.,R);",
+    "  float h=length(q)-R;",
+    "  float north=R*atan(q.y,q.z),east=R*atan(q.x,q.z)+uFold*60.;",
+    "  float yf=north+(h-100.)*.27;", // field lines dip ~75 deg: higher points map to footprints further poleward
+    "  if(abs(yf-uY0)>uW+260.) continue;",
+    "  float dn=curtain(east,yf,0.,-uW*.45,1.)+curtain(east,yf,1.,uW*.05,.55+.4*uSub)+curtain(east,yf,2.,uW*.5,.3+.5*uSub);",
+    "  float lo=smoothstep(hb-6.,hb+5.,h);",
+    "  float g=lo*exp(-(h-hb)/48.)*(1.-.85*smoothstep(180.,250.,h));",
+    "  float rd=smoothstep(165.,250.,h)*exp(-max(h-250.,0.)/70.)*(.02+.025*uKp+.05*uSub);",
+    "  float b=exp(-pow((h-hb-2.)/7.,2.))*(.05+.3*uSub);",
+    "  float diff=smoothstep(4.5,9.,uKp)*.12*exp(-pow((yf-uY0)/(uW+120.),2.))*smoothstep(170.,260.,h);",
+    "  acc+=(dn*(g*GREEN+rd*RED+b*(BLUE*.7+PINK*.35*uSub))+diff*RED)*ds;",
+    " }",
+    " return acc*uInt*.0075;}",
+    "vec3 stars(vec3 d){vec3 p=d*420.;vec3 id=floor(p);float h=h13(id);",
+    " if(h<.982) return vec3(0.);vec3 f=fract(p)-.5;vec3 o=vec3(h13(id+3.1),h13(id+7.7),h13(id+1.3))-.5;",
+    " float b=smoothstep(.32,0.,length(f-o*.5))*pow((h-.982)/.018,3.);",
+    " float ext=smoothstep(0.,.25,d.z);return mix(vec3(.75,.85,1.),vec3(1.,.9,.75),h13(id+9.))*b*ext*1.6;}",
+    "vec3 sky(vec3 d,float jit){float e=max(d.z,0.);",
+    " vec3 base=mix(vec3(.026,.042,.07),vec3(.006,.012,.026),sqrt(e));",
+    " return base+stars(d)+aurora(d,jit);}",
+    "float ridge(vec3 d){float a=atan(d.x,d.y);vec2 c=vec2(cos(a),sin(a));",
+    " return .004+.16*pow(fb(c*3.2+3.),2.)+.035*pow(n2(c*11.+2.),2.);}",
+    "vec3 tone(vec3 c){return 1.-exp(-c*1.25);}",
+    "void main(){",
+    " vec2 uv=(gl_FragCoord.xy/uRes)*2.-1.;",
+    " vec3 d=normalize(uF+uv.x*uTan.x*uR+uv.y*uTan.y*uU);",
+    " float jit=h12(gl_FragCoord.xy+uSeed);",
+    " float m=ridge(d);float el=asin(clamp(d.z,-1.,1.));vec3 c;",
+    " if(el>=0.){",
+    "  if(el<m){float sn=n2(vec2(atan(d.x,d.y)*60.,el*90.));c=vec3(.008,.011,.018)+uAmb*(.08+.9*sn*sn*sn)*smoothstep(0.,m,el);}",
+    "  else c=sky(d,jit);",
+    " } else {",
+    "  float dep=-el;",
+    "  if(dep<m*.92){float sn=n2(vec2(atan(d.x,d.y)*60.,dep*90.));c=vec3(.004,.006,.01)+uAmb*(.03+.3*sn*sn*sn)*smoothstep(0.,m,dep);}",
+    "  else {",
+    "   vec2 gp=d.xy*(.002/max(-d.z,.0005));",
+    "   float sn=smoothstep(.52,.72,fb(gp*.35));float cr=n2(gp*3.);",
+    "   vec3 rd=normalize(vec3(d.x+(cr-.5)*.03,d.y+(n2(gp*3.+5.)-.5)*.03,-d.z));",
+    "   float F=.02+.98*pow(1.-(-d.z),5.);",
+    "   vec3 ice=sky(rd,jit)*mix(.35,1.,F)*.8;",
+    "   vec3 snow=vec3(.03,.04,.06)+uAmb*.5;",
+    "   c=mix(ice,snow,sn*.85);",
+    "  }",
+    " }",
+    " gl_FragColor=vec4(tone(c),1.);}"
+  ].join("\n");
+
+  var gl = null, prog, U = {};
+  try { gl = cv.getContext("webgl", { antialias: false, alpha: false, depth: false }); } catch (e) { gl = null; }
+  if (gl) {
+    try {
+      var mk = function (type, src) {
+        var s = gl.createShader(type); gl.shaderSource(s, src); gl.compileShader(s);
+        if (!gl.getShaderParameter(s, gl.COMPILE_STATUS)) throw new Error(gl.getShaderInfoLog(s));
+        return s;
+      };
+      prog = gl.createProgram();
+      gl.attachShader(prog, mk(gl.VERTEX_SHADER, VS));
+      gl.attachShader(prog, mk(gl.FRAGMENT_SHADER, FS));
+      gl.linkProgram(prog);
+      if (!gl.getProgramParameter(prog, gl.LINK_STATUS)) throw new Error(gl.getProgramInfoLog(prog));
+      gl.useProgram(prog);
+      var buf = gl.createBuffer();
+      gl.bindBuffer(gl.ARRAY_BUFFER, buf);
+      gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([-1, -1, 3, -1, -1, 3]), gl.STATIC_DRAW);
+      var loc = gl.getAttribLocation(prog, "p");
+      gl.enableVertexAttribArray(loc);
+      gl.vertexAttribPointer(loc, 2, gl.FLOAT, false, 0, 0);
+      ["uRes", "uF", "uR", "uU", "uTan", "uY0", "uW", "uInt", "uSub", "uFold", "uRay", "uKp", "uSeed", "uN", "uAmb"].forEach(function (n) { U[n] = gl.getUniformLocation(prog, n); });
+    } catch (e) {
+      console.warn("WebGL shader unavailable, using canvas fallback");
+      gl = null;
+    }
+  }
+  var ctx = gl ? null : cv.getContext("2d");
+  // software rasterisers (SwiftShader, llvmpipe) get a lighter render; adapt() refines it from frame times
+  var qual = mobile ? 0.55 : 0.7, steps = mobile ? 40 : 64;
+  try {
+    var dbg = gl && gl.getExtension("WEBGL_debug_renderer_info");
+    if (dbg && /swiftshader|llvmpipe|software/i.test(gl.getParameter(dbg.UNMASKED_RENDERER_WEBGL))) { qual = 0.3; steps = 28; }
+  } catch (e) {}
+
+  var W = 1, H = 1;
+  function resize() {
+    var r = cv.getBoundingClientRect();
+    var q = gl ? qual : 0.5;
+    var sc = Math.min(window.devicePixelRatio || 1, 1.5) * q;
+    W = Math.max(64, Math.min(1280, Math.round(r.width * sc)));
+    H = Math.max(64, Math.round(W * r.height / Math.max(1, r.width)));
+    if (cv.width !== W || cv.height !== H) { cv.width = W; cv.height = H; }
+    if (gl) gl.viewport(0, 0, W, H);
+  }
+
+  function view() {
+    var cy = Math.cos(S.yaw), sy = Math.sin(S.yaw), cp = Math.cos(S.pitch), sp = Math.sin(S.pitch);
+    var f = [sy * cp, cy * cp, sp], r = [cy, -sy, 0];
+    var u = [r[1] * f[2] - r[2] * f[1], r[2] * f[0] - r[0] * f[2], r[0] * f[1] - r[1] * f[0]];
+    var asp = W / H;
+    var ty = asp >= 1 ? Math.tan(31 * Math.PI / 180) : Math.tan(42 * Math.PI / 180);
+    return { f: f, r: r, u: u, tx: ty * asp, ty: ty };
+  }
+
+  function params() {
+    var sub = subEnv(), k = kp();
+    var arcLat = edgeLat() + 1.4;
+    var widthDeg = 2.2 + 0.35 * k + 2.5 * sub;
+    var wKm = widthDeg * KM_PER_DEG;
+    var y0 = (arcLat - OBS) * KM_PER_DEG + wKm * 0.45;
+    var inten = (0.45 + 0.17 * k) * (S.south ? 1.2 : 0.75) * (1 + 1.3 * sub);
+    return { sub: sub, k: k, y0: y0, w: wKm, inten: inten, arcLat: arcLat };
+  }
+
+  var seed = 0;
+  function draw() {
+    var P = params(), V = view();
+    if (gl) {
+      gl.uniform2f(U.uRes, W, H);
+      gl.uniform3fv(U.uF, V.f); gl.uniform3fv(U.uR, V.r); gl.uniform3fv(U.uU, V.u);
+      gl.uniform2f(U.uTan, V.tx, V.ty);
+      gl.uniform1f(U.uY0, P.y0); gl.uniform1f(U.uW, P.w);
+      gl.uniform1f(U.uInt, P.inten); gl.uniform1f(U.uSub, P.sub);
+      gl.uniform1f(U.uFold, S.fold); gl.uniform1f(U.uRay, S.ray);
+      gl.uniform1f(U.uKp, P.k); gl.uniform1f(U.uSeed, (seed = (seed + 17.31) % 1000));
+      gl.uniform1i(U.uN, steps);
+      var a = 0.05 * P.inten;
+      gl.uniform3f(U.uAmb, 0.16 * a, a, 0.4 * a);
+      gl.drawArrays(gl.TRIANGLES, 0, 3);
+    } else draw2d(P, V);
+  }
+
+  // Canvas fallback: same geometry, one curtain traced column by column
+  function draw2d(P, V) {
+    var c = ctx;
+    c.fillStyle = "#05090f"; c.fillRect(0, 0, W, H);
+    var focal = H / 2 / V.ty, hz = H / 2 + Math.tan(S.pitch) * focal;
+    c.fillStyle = "#c8d4e6";
+    for (var i = 0; i < 160; i++) {
+      var sx = (Math.sin(i * 91.7 + S.yaw * 3) * 0.5 + 0.5) * W, syy = (Math.sin(i * 47.3) * 0.5 + 0.5) * hz;
+      c.fillRect(sx, syy, 1, 1);
+    }
+    for (var x = 0; x < W; x += 2) {
+      var az = S.yaw + Math.atan(((x / W) * 2 - 1) * V.tx);
+      var ca = Math.cos(az);
+      var fold = 60 * Math.sin(az * 3 + S.fold * 0.8) + 25 * Math.sin(az * 11 - S.fold * 1.7);
+      var y = P.y0 - P.w * 0.45 + fold;
+      if (ca * y <= 0) continue;
+      var d = y / ca;
+      var e0 = elev(d, 105) * Math.PI / 180, e1 = elev(d, 240) * Math.PI / 180;
+      var y0 = hz - Math.tan(e0) * focal, y1 = hz - Math.tan(e1) * focal;
+      var ray = 0.5 + 0.5 * Math.sin(x * 0.37 + S.ray * 5) * Math.sin(x * 0.11 - S.ray * 2);
+      var al = Math.min(0.9, 0.25 * P.inten * (0.4 + ray));
+      c.fillStyle = "rgba(90,240,140," + al + ")"; c.fillRect(x, y1 + (y0 - y1) * 0.4, 2, (y0 - y1) * 0.6);
+      c.fillStyle = "rgba(230,70,80," + al * 0.4 + ")"; c.fillRect(x, y1, 2, (y0 - y1) * 0.4);
+    }
+    c.fillStyle = "#03050a"; c.fillRect(0, hz, W, H - hz);
+  }
+
+  function fmtClock(t) {
+    t = Math.max(0, Math.floor(t));
+    var h = Math.floor(t / 3600), m = Math.floor(t / 60) % 60;
+    return (h < 10 ? "0" : "") + h + ":" + (m < 10 ? "0" : "") + m;
+  }
+  var DIRS = ["north", "northeast", "east", "southeast", "south", "southwest", "west", "northwest"];
+  var last = {};
+  function setText(id, v) { if (last[id] !== v) { last[id] = v; $(id).textContent = v; } }
+  function readouts() {
+    var P = params(), k = kp();
+    var g = k >= 5 ? ", G" + Math.min(5, Math.floor(k) - 4) + " storm" : k >= 4 ? ", active" : ", quiet";
+    setText("rKp", kpText(S.kp3) + g);
+    setText("rLat", edgeLat().toFixed(1) + "° geomag.");
+    var d = (P.arcLat - OBS) * KM_PER_DEG;
+    setText("rArc", Math.abs(d) < 25 ? "overhead" : Math.round(elev(d, 110)) + "° above " + (d > 0 ? "north" : "south"));
+    setText("rSub", Math.round(P.sub * 100) + "%");
+    var yd = ((S.yaw * 180 / Math.PI) % 360 + 360) % 360;
+    setText("hudDir", "Facing " + DIRS[Math.round(yd / 45) % 8]);
+    setText("hudClock", fmtClock(S.t) + " elapsed");
+    var a = S.t - S.onset;
+    setText("hudPhase", a >= 0 && a < 180 ? "Substorm onset" : P.sub > 0.25 ? "Substorm expansion" : S.south ? "Growth phase" : "Quiet arc");
+  }
+
+  function step(dt) {
+    var sdt = dt * S.lapse;
+    S.t += sdt;
+    var v = S.wind / 450, sub = subEnv();
+    S.fold += sdt * 0.0016 * v * (1 + 2.5 * sub) * (S.south ? 1.3 : 0.8);
+    S.ray += sdt * 0.02 * v * (1 + 4 * sub);
+    if (S.south && S.t >= S.nextAuto) { S.onset = S.t; S.nextAuto = S.t + 3600; }
+  }
+
+  var prev = 0, dirty = true, drew = false, slowAvg = 0.016;
+  function frame(now) {
+    var dt = prev ? Math.min(0.1, (now - prev) / 1000) : 0;
+    prev = now;
+    // only time intervals that followed a draw; shrink the backing store when frames run slow
+    if (gl && dt > 0 && drew) {
+      slowAvg = slowAvg * 0.9 + dt * 0.1;
+      if (slowAvg > 0.045 && qual > 0.25) { qual *= 0.85; slowAvg = 0.03; resize(); dirty = true; }
+    }
+    if (!S.paused) { step(dt); dirty = true; }
+    drew = dirty;
+    if (dirty) { draw(); readouts(); dirty = false; }
+    requestAnimationFrame(frame);
+  }
+
+  // controls
+  function sync() {
+    $("kpOut").textContent = kpText(S.kp3);
+    $("windOut").textContent = S.wind + " km/s";
+    $("lapseOut").textContent = S.lapse + "×";
+    $("bzN").setAttribute("aria-pressed", String(!S.south));
+    $("bzS").setAttribute("aria-pressed", String(S.south));
+    $("bzOut").textContent = S.south ? "−5 nT" : "+5 nT";
+    $("pause").textContent = S.paused ? "Play" : "Pause";
+    $("pause").setAttribute("aria-pressed", String(S.paused));
+    dirty = true;
+  }
+  $("kp").addEventListener("input", function () { S.kp3 = +this.value; sync(); });
+  $("wind").addEventListener("input", function () { S.wind = +this.value; sync(); });
+  $("lapse").addEventListener("input", function () { S.lapse = +this.value; sync(); });
+  function setBz(south) {
+    if (south && !S.south) S.nextAuto = S.t + 600; // ~10 min growth phase before onset
+    if (!south) S.nextAuto = 1e9;
+    S.south = south; sync();
+  }
+  $("bzN").addEventListener("click", function () { setBz(false); });
+  $("bzS").addEventListener("click", function () { setBz(true); });
+  function substorm() { S.onset = S.t; if (S.south) S.nextAuto = S.t + 3600; sync(); }
+  $("substorm").addEventListener("click", substorm);
+  $("pause").addEventListener("click", function () { S.paused = !S.paused; sync(); });
+
+  var drag = { id: null, x: 0, y: 0 };
+  function look(dx, dy) {
+    var k = (2 * view().ty) / cv.clientHeight;
+    S.yaw -= dx * k; S.pitch = Math.max(-0.5, Math.min(1.45, S.pitch + dy * k));
+    dirty = true;
+  }
+  cv.addEventListener("pointerdown", function (e) { drag.id = e.pointerId; drag.x = e.clientX; drag.y = e.clientY; try { cv.setPointerCapture(e.pointerId); } catch (_) {} });
+  cv.addEventListener("pointermove", function (e) {
+    if (drag.id !== e.pointerId) return;
+    look(e.clientX - drag.x, e.clientY - drag.y); drag.x = e.clientX; drag.y = e.clientY;
+  });
+  function up(e) { if (drag.id === e.pointerId) drag.id = null; }
+  cv.addEventListener("pointerup", up); cv.addEventListener("pointercancel", up);
+  cv.addEventListener("keydown", function (e) {
+    var s = 0.06;
+    if (e.key === "ArrowLeft") S.yaw -= s; else if (e.key === "ArrowRight") S.yaw += s;
+    else if (e.key === "ArrowUp") S.pitch = Math.min(1.45, S.pitch + s);
+    else if (e.key === "ArrowDown") S.pitch = Math.max(-0.5, S.pitch - s);
+    else return;
+    e.preventDefault(); dirty = true;
+  });
+  document.addEventListener("keydown", function (e) {
+    if (e.ctrlKey || e.metaKey || e.altKey) return;
+    var t = e.target, tag = t && t.tagName;
+    if (tag === "INPUT" || tag === "SELECT" || tag === "TEXTAREA") return;
+    if (e.key === " " && tag !== "BUTTON") { e.preventDefault(); S.paused = !S.paused; sync(); }
+    else if (e.key === "s" || e.key === "S") substorm();
+    else if (e.key === "b" || e.key === "B") setBz(!S.south);
+  });
+
+  if (window.ResizeObserver) new ResizeObserver(function () { resize(); draw(); }).observe(cv);
+  window.addEventListener("resize", function () { resize(); draw(); });
+  resize(); sync(); draw(); readouts();
+  requestAnimationFrame(frame);
+})();
+</script>
+</body>
+</html>
