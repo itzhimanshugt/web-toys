@@ -1,0 +1,530 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>Turing Garden</title>
+<meta name="description" content="A Gray-Scott reaction-diffusion garden running on the GPU: paint chemical V, pick feed and kill rates on a live parameter map and watch spots, worms, mazes and coral grow.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,400;0,9..144,600;1,9..144,400&family=Manrope:wght@400;500;700&display=swap" rel="stylesheet">
+<style>
+/* Layout: one lab instrument. Live dish (hero, left) + instrument panel (right); stacks under 900px. */
+:root {
+  --abyss: #0c1416;      /* bench black, blue-green biased */
+  --slate: #151f22;      /* panel surface */
+  --rule: #2a3a3d;       /* hairlines */
+  --bone: #e6e1d4;       /* primary text */
+  --lichen: #8fa29d;     /* secondary text */
+  --celadon: #9fd2bd;    /* accent: selection, focus */
+  --amber: #e2a867;      /* second accent: crosshair, readouts */
+  --display: "Fraunces", "Iowan Old Style", Georgia, serif;
+  --ui: "Manrope", "Segoe UI", system-ui, sans-serif;
+  --mono: var(--ui);
+  color-scheme: dark;
+}
+* { box-sizing: border-box; }
+html { background: var(--abyss); }
+body {
+  margin: 0; background: var(--abyss); color: var(--bone); font: 14px/1.5 var(--ui);
+  padding-block: max(14px, env(safe-area-inset-top, 0px)) max(18px, env(safe-area-inset-bottom, 0px));
+  padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px));
+}
+.wrap { max-width: 1240px; margin: 0 auto; display: grid; gap: 14px; }
+header { display: flex; flex-wrap: wrap; align-items: baseline; justify-content: space-between; gap: 6px 20px; }
+header > * { min-width: 0; }
+h1 { font: 600 clamp(24px, 4vw, 32px)/1.05 var(--display); margin: 0; letter-spacing: -0.01em; text-wrap: balance; }
+.lede { margin: 0; color: var(--lichen); max-width: 62ch; text-wrap: pretty; }
+.main { display: grid; grid-template-columns: minmax(0, 1fr) 340px; gap: 18px; align-items: start; }
+.main > * { min-width: 0; }
+.stage { position: relative; width: 100%; max-width: calc(100vh - 120px); min-width: 0; aspect-ratio: 1; justify-self: center; border: 1px solid var(--rule); border-radius: 6px; overflow: hidden; background: #000; }
+.stage canvas { position: absolute; inset: 0; width: 100%; height: 100%; display: block; touch-action: none; cursor: crosshair; }
+.stage canvas:focus-visible { outline: 2px solid var(--celadon); outline-offset: -2px; }
+.tag { position: absolute; left: 10px; top: 10px; font: 500 12px/1 var(--mono); background: rgba(12,20,22,.72); color: var(--bone); padding: 6px 8px; border-radius: 3px; pointer-events: none; font-variant-numeric: tabular-nums; }
+.axis { position: absolute; font: 500 11px/1 var(--mono); color: var(--bone); background: rgba(12,20,22,.72); padding: 4px 6px; border-radius: 3px; pointer-events: none; font-variant-numeric: tabular-nums; }
+.axis.x { bottom: 8px; left: 50%; transform: translateX(-50%); }
+.axis.y { right: 8px; top: 50%; transform: translateY(-50%) rotate(-90deg); transform-origin: center; }
+.axis.hover { right: 10px; top: 10px; color: var(--amber); }
+[hidden] { display: none !important; }
+.panel { display: grid; gap: 14px; }
+.group { display: grid; gap: 10px; padding-top: 12px; border-top: 1px solid var(--rule); }
+.group:first-child { border-top: 0; padding-top: 0; }
+.label { font: 700 12px/1 var(--ui); color: var(--lichen); margin: 0; display: flex; justify-content: space-between; gap: 8px; }
+.label span { font: 500 11px/1 var(--mono); letter-spacing: 0; text-transform: none; color: var(--amber); font-variant-numeric: tabular-nums; }
+#map { width: 100%; height: 230px; display: block; border: 1px solid var(--rule); border-radius: 4px; background: var(--slate); touch-action: none; cursor: crosshair; }
+#map:focus-visible { outline: 2px solid var(--celadon); outline-offset: 2px; }
+.readout { font: 12px/1.4 var(--mono); color: var(--bone); margin: 0; font-variant-numeric: tabular-nums; display: flex; flex-wrap: wrap; gap: 4px 14px; }
+.readout b { color: var(--amber); font-weight: 500; }
+.presets { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 6px; }
+button, select { font: 500 13px/1 var(--ui); color: var(--bone); background: var(--slate); border: 1px solid var(--rule); border-radius: 4px; padding: 9px 10px; cursor: pointer; min-width: 0; }
+button:hover, select:hover { border-color: var(--lichen); }
+button:focus-visible, select:focus-visible, input:focus-visible { outline: 2px solid var(--celadon); outline-offset: 2px; }
+.presets button { text-align: left; display: flex; justify-content: space-between; gap: 6px; align-items: baseline; }
+.presets button small { font: 400 11px/1 var(--mono); color: var(--lichen); font-variant-numeric: tabular-nums; }
+.presets button[aria-pressed="true"] { border-color: var(--celadon); background: #1c2c2b; }
+.row { display: flex; flex-wrap: wrap; gap: 6px; }
+.row > button { flex: 1 1 auto; }
+#pause[aria-pressed="true"], #sweep[aria-pressed="true"] { border-color: var(--amber); color: var(--amber); }
+.slider { display: grid; grid-template-columns: 92px minmax(0, 1fr) 44px; align-items: center; gap: 10px; font-size: 13px; }
+.slider output { font: 12px var(--mono); color: var(--amber); text-align: right; font-variant-numeric: tabular-nums; }
+input[type=range] { width: 100%; accent-color: var(--celadon); margin: 0; min-width: 0; }
+select { width: 100%; padding: 8px; }
+.note { color: var(--lichen); font-size: 12.5px; margin: 0; text-wrap: pretty; }
+.note code, .eq { font-family: var(--mono); font-size: 12px; color: var(--bone); }
+.eq { display: block; line-height: 1.7; white-space: normal; overflow-wrap: anywhere; }
+kbd { font: 11px var(--mono); border: 1px solid var(--rule); border-bottom-width: 2px; border-radius: 3px; padding: 1px 4px; color: var(--bone); }
+footer { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 300px), 1fr)); gap: 12px 28px; border-top: 1px solid var(--rule); padding-top: 14px; }
+footer > * { min-width: 0; }
+@media (max-width: 900px) {
+  .main { grid-template-columns: minmax(0, 1fr); }
+  .stage { max-width: 100%; }
+}
+body { font-variant-numeric: tabular-nums; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <h1>Turing Garden</h1>
+    <p class="lede">Two chemicals, U and V, feed, react and diffuse across a dish. Drag to seed V, pick a feed and kill rate on the map, and the dish grows the pattern that lives there.</p>
+  </header>
+  <div class="main">
+    <div class="stage" id="stage">
+      <canvas id="view" tabindex="0" aria-label="Reaction-diffusion dish. Drag to paint chemical V; hold Shift or right-drag to erase."></canvas>
+      <div class="tag" id="tag">Garden</div>
+      <div class="axis x" id="axX" hidden>F 0.010 → 0.090</div>
+      <div class="axis y" id="axY" hidden>k 0.045 → 0.070</div>
+      <div class="axis hover" id="axH" hidden></div>
+    </div>
+    <div class="panel">
+      <section class="group" aria-labelledby="mapL">
+        <p class="label" id="mapL">Parameter map <span id="near">near Pearson κ</span></p>
+        <canvas id="map" tabindex="0" role="slider" aria-label="Feed rate F against kill rate k. Arrow keys move the crosshair." aria-valuetext=""></canvas>
+        <p class="readout"><span>F <b id="fv">0.0545</b></span><span>k <b id="kv">0.0620</b></span><span id="sps">0 steps/s</span></p>
+      </section>
+      <section class="group" aria-labelledby="preL">
+        <p class="label" id="preL">Patterns <span>keys 1–8</span></p>
+        <div class="presets" id="presets"></div>
+      </section>
+      <section class="group" aria-labelledby="dishL">
+        <p class="label" id="dishL">Dish</p>
+        <div class="row">
+          <button id="pause" aria-pressed="false">Pause</button>
+          <button id="seed">Seed spots</button>
+          <button id="clear">Clear</button>
+          <button id="sweep" aria-pressed="false">Sweep F × k</button>
+        </div>
+        <label class="slider" for="brush">Brush size <input type="range" id="brush" min="2" max="40" value="10"><output id="brushO" for="brush">10</output></label>
+        <label class="slider" for="speed">Steps/frame <input type="range" id="speed" min="8" max="24" value="16"><output id="speedO" for="speed">16</output></label>
+      </section>
+      <section class="group" aria-labelledby="lookL">
+        <p class="label" id="lookL">Light and colour</p>
+        <label class="slider" for="palette">Palette <select id="palette">
+          <option value="coral">Coral reef</option>
+          <option value="ink">Ink on paper</option>
+          <option value="bio">Bioluminescent</option>
+          <option value="glaze">Celadon glaze</option>
+        </select><span></span></label>
+        <label class="slider" for="az">Light angle <input type="range" id="az" min="0" max="359" value="135"><output id="azO" for="az">135°</output></label>
+        <label class="slider" for="el">Light height <input type="range" id="el" min="8" max="85" value="38"><output id="elO" for="el">38°</output></label>
+        <label class="slider" for="relief">Relief <input type="range" id="relief" min="0" max="40" value="16"><output id="reliefO" for="relief">16</output></label>
+      </section>
+    </div>
+  </div>
+  <footer>
+    <p class="note"><span class="eq">∂u/∂t = D<sub>u</sub>∇²u − uv² + F(1 − u)<br>∂v/∂t = D<sub>v</sub>∇²v + uv² − (F + k)v</span>
+    This dish uses D<sub>u</sub> = 1.0, D<sub>v</sub> = 0.5, a 9-point Laplacian and a time step of 1. F feeds U in from outside; k removes V. The amber curve on the map is the saddle-node line (F + k)² = F/4, where the uniform reacting state appears.</p>
+    <p class="note">Alan Turing proposed in 1952 that two diffusing chemicals could break a uniform tissue into spots and stripes. John Pearson's 1993 <i>Science</i> paper "Complex Patterns in a Simple System" mapped this Gray-Scott model and sorted its patterns into Greek-letter classes, plotted faintly on the map. <kbd>Space</kbd> pause, <kbd>R</kbd> seed, <kbd>C</kbd> clear, <kbd>S</kbd> sweep, <kbd>[</kbd> <kbd>]</kbd> brush. <span id="mode"></span></p>
+  </footer>
+</div>
+<script>
+"use strict";
+const $ = id => document.getElementById(id);
+// Du=1.0, Dv=0.5, 9-point stencil (0.2 edges, 0.05 corners, -1 centre), dt=1. Shared by GPU and CPU.
+const PRESETS = [
+  { id: "mitosis", name: "Mitosis", F: 0.0367, k: 0.0649 },
+  { id: "coral", name: "Coral growth", F: 0.0545, k: 0.062 },
+  { id: "worms", name: "Worms", F: 0.078, k: 0.061 },
+  { id: "maze", name: "Maze", F: 0.029, k: 0.057 },
+  { id: "holes", name: "Holes", F: 0.039, k: 0.058 },
+  { id: "chaos", name: "Chaos", F: 0.026, k: 0.051 },
+  { id: "moving", name: "Moving spots", F: 0.014, k: 0.054 },
+  { id: "spots", name: "Spots", F: 0.030, k: 0.062 }
+];
+// Representative (F, k) of Pearson's 1993 classes, as tabulated on R. Munafo's Xmorphia pages.
+const PEARSON = [["α",0.010,0.047],["β",0.026,0.051],["γ",0.022,0.051],["δ",0.030,0.055],["ε",0.018,0.055],["ζ",0.022,0.061],
+  ["η",0.034,0.063],["θ",0.038,0.061],["ι",0.046,0.0594],["κ",0.050,0.063],["λ",0.026,0.061],["μ",0.046,0.065]];
+const PALETTES = {
+  coral: ["#06222a", "#0f4f58", "#d9654f", "#f3a77c", "#fde7cf"],
+  ink:   ["#ece6d8", "#cfc6b4", "#5d5a60", "#25232b", "#0d0c12"],
+  bio:   ["#01050b", "#062039", "#0d6c8c", "#3fe9cc", "#e8fff8"],
+  glaze: ["#2a1c13", "#6a4831", "#86ad99", "#c9e0cf", "#f4f6ec"]
+};
+const SW = { F0: 0.010, F1: 0.090, k0: 0.045, k1: 0.070 };
+const MAP = { k0: 0.040, k1: 0.072, F0: 0.0, F1: 0.09 };
+const small = matchMedia("(max-width: 600px)").matches;
+const reduce = matchMedia("(prefers-reduced-motion: reduce)").matches;
+const S = { F: 0.0545, k: 0.062, paused: reduce, speed: 16, brush: 10, sweep: false, az: 135, el: 38, relief: 16, palette: "coral", preset: "coral" };
+try { const p = localStorage.getItem("turing-palette"); if (p && PALETTES[p]) S.palette = p; } catch (e) {}
+
+function hex(h) { return [1, 3, 5].map(i => parseInt(h.slice(i, i + 2), 16) / 255); }
+function lightVec() { const a = S.az * Math.PI / 180, e = S.el * Math.PI / 180; return [Math.cos(e) * Math.cos(a), Math.cos(e) * Math.sin(a), Math.sin(e)]; }
+
+// Initial chemistry: U=1, V=0, with scattered square seeds of U=0.5, V=0.25 (+ noise).
+function makeSeed(w, h, density) {
+  const d = new Float32Array(w * h * 4);
+  for (let i = 0; i < w * h; i++) { d[i * 4] = 1; d[i * 4 + 3] = 1; }
+  const n = Math.round(w * h / 400 * density);
+  for (let s = 0; s < n; s++) {
+    const cx = Math.random() * w | 0, cy = Math.random() * h | 0, r = 2 + Math.random() * 3 | 0;
+    for (let y = -r; y <= r; y++) for (let x = -r; x <= r; x++) {
+      const px = (cx + x + w) % w, py = (cy + y + h) % h, i = (py * w + px) * 4;
+      d[i] = 0.5 + Math.random() * 0.05; d[i + 1] = 0.25 + Math.random() * 0.05;
+    }
+  }
+  return d;
+}
+
+// ---------- GPU engine ----------
+const VS = `#version 300 es
+void main(){ vec2 p = vec2((gl_VertexID << 1) & 2, gl_VertexID & 2); gl_Position = vec4(p * 2.0 - 1.0, 0.0, 1.0); }`;
+const SIM = `#version 300 es
+precision highp float; precision highp int; precision highp sampler2D;
+uniform sampler2D S; uniform vec2 fk; uniform int sweep; uniform vec4 sw; uniform vec4 seg; uniform vec2 bp;
+out vec4 o; ivec2 sz;
+vec2 T(ivec2 p){ p = sweep == 1 ? clamp(p, ivec2(0), sz - 1) : (p + sz) % sz; return texelFetch(S, p, 0).rg; }
+void main(){
+  sz = textureSize(S, 0); ivec2 p = ivec2(gl_FragCoord.xy); vec2 c = T(p);
+  vec2 l = 0.2 * (T(p + ivec2(1,0)) + T(p - ivec2(1,0)) + T(p + ivec2(0,1)) + T(p - ivec2(0,1)))
+         + 0.05 * (T(p + ivec2(1,1)) + T(p + ivec2(-1,1)) + T(p + ivec2(1,-1)) + T(p + ivec2(-1,-1))) - c;
+  float F = fk.x, k = fk.y;
+  if (sweep == 1) { vec2 q = (vec2(p) + 0.5) / vec2(sz); F = mix(sw.x, sw.y, q.x); k = mix(sw.z, sw.w, q.y); }
+  float r = c.x * c.y * c.y;
+  vec2 n = c + vec2(l.x - r + F * (1.0 - c.x), 0.5 * l.y + r - (F + k) * c.y);
+  if (bp.y > 0.0) {
+    vec2 a = seg.xy, ab = seg.zw - seg.xy, pp = vec2(p) + 0.5;
+    float t = clamp(dot(pp - a, ab) / max(dot(ab, ab), 1e-6), 0.0, 1.0), d = length(pp - a - ab * t);
+    if (d < bp.x) n = bp.y < 1.5 ? vec2(0.5, max(n.y, 0.25 + 0.2 * (1.0 - d / bp.x))) : vec2(1.0, 0.0);
+  }
+  o = vec4(clamp(n, 0.0, 1.0), 0.0, 1.0);
+}`;
+const SHOW = `#version 300 es
+precision highp float; precision highp int; precision highp sampler2D;
+uniform sampler2D S; uniform vec2 res; uniform vec3 L; uniform float relief; uniform vec3 pal[5]; uniform int wrap;
+out vec4 o; ivec2 sz;
+float G(ivec2 p){ p = wrap == 1 ? (p % sz + sz) % sz : clamp(p, ivec2(0), sz - 1); return texelFetch(S, p, 0).g; }
+float V(vec2 t){ vec2 f = t - 0.5; ivec2 i = ivec2(floor(f)); vec2 w = fract(f);
+  return mix(mix(G(i), G(i + ivec2(1,0)), w.x), mix(G(i + ivec2(0,1)), G(i + ivec2(1,1)), w.x), w.y); }
+void main(){
+  sz = textureSize(S, 0); vec2 t = gl_FragCoord.xy / res * vec2(sz);
+  float v = V(t), dx = V(t + vec2(1,0)) - V(t - vec2(1,0)), dy = V(t + vec2(0,1)) - V(t - vec2(0,1));
+  vec3 n = normalize(vec3(-dx * relief, -dy * relief, 1.0));
+  float dif = max(dot(n, L), 0.0), sp = pow(max(dot(n, normalize(L + vec3(0,0,1))), 0.0), 48.0);
+  float x = clamp(v * 2.5, 0.0, 1.0) * 4.0; int j = int(min(floor(x), 3.0));
+  vec3 col = mix(pal[j], pal[j + 1], x - float(j));
+  col *= 0.5 + 0.62 * dif / max(L.z, 0.35) * 0.6 + 0.12;
+  col += sp * 0.3 * smoothstep(0.04, 0.25, v) * step(0.01, relief);
+  o = vec4(col, 1.0);
+}`;
+
+function makeGPU(canvas, w, h) {
+  if (window.__forceCPU) return null;
+  let gl;
+  try { gl = canvas.getContext("webgl2", { antialias: false, alpha: false, depth: false, preserveDrawingBuffer: true }); } catch (e) { gl = null; }
+  if (!gl) return null;
+  const tex = [], fbo = [];
+  let fmt = null;
+  for (const [ext, ifmt, label] of [["EXT_color_buffer_float", gl.RGBA32F, "32-bit float"], ["EXT_color_buffer_half_float", gl.RGBA16F, "16-bit half float"]]) {
+    if (!gl.getExtension(ext)) continue;
+    const t = gl.createTexture(); gl.bindTexture(gl.TEXTURE_2D, t);
+    gl.texStorage2D(gl.TEXTURE_2D, 1, ifmt, w, h);
+    const f = gl.createFramebuffer(); gl.bindFramebuffer(gl.FRAMEBUFFER, f);
+    gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_2D, t, 0);
+    const ok = gl.checkFramebufferStatus(gl.FRAMEBUFFER) === gl.FRAMEBUFFER_COMPLETE;
+    gl.deleteFramebuffer(f); gl.deleteTexture(t);
+    if (ok) { fmt = { ifmt, label }; break; }
+  }
+  gl.bindFramebuffer(gl.FRAMEBUFFER, null);
+  if (!fmt) return null;
+  function prog(fs) {
+    const p = gl.createProgram();
+    for (const [type, src] of [[gl.VERTEX_SHADER, VS], [gl.FRAGMENT_SHADER, fs]]) {
+      const s = gl.createShader(type); gl.shaderSource(s, src); gl.compileShader(s);
+      if (!gl.getShaderParameter(s, gl.COMPILE_STATUS)) throw new Error(gl.getShaderInfoLog(s));
+      gl.attachShader(p, s);
+    }
+    gl.linkProgram(p);
+    if (!gl.getProgramParameter(p, gl.LINK_STATUS)) throw new Error(gl.getProgramInfoLog(p));
+    const u = {}, n = gl.getProgramParameter(p, gl.ACTIVE_UNIFORMS);
+    for (let i = 0; i < n; i++) { const nm = gl.getActiveUniform(p, i).name.replace("[0]", ""); u[nm] = gl.getUniformLocation(p, nm); }
+    return { p, u };
+  }
+  let sim, show;
+  try { sim = prog(SIM); show = prog(SHOW); } catch (e) { console.warn("Turing Garden: shader failed, using CPU", e.message); return null; }
+  for (let i = 0; i < 2; i++) {
+    const t = gl.createTexture(); gl.bindTexture(gl.TEXTURE_2D, t);
+    gl.texStorage2D(gl.TEXTURE_2D, 1, fmt.ifmt, w, h);
+    for (const [k, v] of [[gl.TEXTURE_MIN_FILTER, gl.NEAREST], [gl.TEXTURE_MAG_FILTER, gl.NEAREST], [gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE], [gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE]]) gl.texParameteri(gl.TEXTURE_2D, k, v);
+    const f = gl.createFramebuffer(); gl.bindFramebuffer(gl.FRAMEBUFFER, f);
+    gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_2D, t, 0);
+    tex.push(t); fbo.push(f);
+  }
+  gl.bindFramebuffer(gl.FRAMEBUFFER, null);
+  gl.bindVertexArray(gl.createVertexArray());
+  let cur = 0;
+  const palBuf = new Float32Array(15);
+  return {
+    kind: "GPU, " + fmt.label, w, h,
+    seed(d) { gl.bindTexture(gl.TEXTURE_2D, tex[cur]); gl.texSubImage2D(gl.TEXTURE_2D, 0, 0, 0, w, h, gl.RGBA, gl.FLOAT, d); },
+    step(n, b) {
+      gl.useProgram(sim.p); gl.viewport(0, 0, w, h);
+      gl.uniform2f(sim.u.fk, S.F, S.k); gl.uniform1i(sim.u.sweep, S.sweep ? 1 : 0);
+      gl.uniform4f(sim.u.sw, SW.F0, SW.F1, SW.k0, SW.k1); gl.uniform1i(sim.u.S, 0); gl.activeTexture(gl.TEXTURE0);
+      for (let i = 0; i < n; i++) {
+        if (i === 0 && b) { gl.uniform4f(sim.u.seg, b.ax, b.ay, b.bx, b.by); gl.uniform2f(sim.u.bp, b.r, b.mode); }
+        else if (i <= 1) gl.uniform2f(sim.u.bp, 0, 0);
+        gl.bindTexture(gl.TEXTURE_2D, tex[cur]); gl.bindFramebuffer(gl.FRAMEBUFFER, fbo[1 - cur]);
+        gl.drawArrays(gl.TRIANGLES, 0, 3); cur = 1 - cur;
+      }
+    },
+    render() {
+      gl.bindFramebuffer(gl.FRAMEBUFFER, null); gl.viewport(0, 0, canvas.width, canvas.height);
+      gl.useProgram(show.p); gl.bindTexture(gl.TEXTURE_2D, tex[cur]); gl.uniform1i(show.u.S, 0);
+      gl.uniform2f(show.u.res, canvas.width, canvas.height); gl.uniform3fv(show.u.L, lightVec());
+      gl.uniform1f(show.u.relief, S.relief); gl.uniform1i(show.u.wrap, S.sweep ? 0 : 1);
+      PALETTES[S.palette].forEach((c, i) => palBuf.set(hex(c), i * 3)); gl.uniform3fv(show.u.pal, palBuf);
+      gl.drawArrays(gl.TRIANGLES, 0, 3);
+    },
+    resize() { const r = canvas.getBoundingClientRect(), d = Math.min(devicePixelRatio || 1, 2); canvas.width = Math.min(1600, Math.round(r.width * d)) || w; canvas.height = Math.min(1600, Math.round(r.height * d)) || h; }
+  };
+}
+
+// ---------- CPU fallback (no float render target) ----------
+function makeCPU(canvas, w, h) {
+  const ctx = canvas.getContext("2d");
+  canvas.width = w; canvas.height = h;
+  let u = new Float32Array(w * h), v = new Float32Array(w * h), u2 = new Float32Array(w * h), v2 = new Float32Array(w * h);
+  const img = ctx.createImageData(w, h), Fx = new Float32Array(w), ky = new Float32Array(h), lut = new Uint8ClampedArray(256 * 3);
+  let lutFor = "";
+  function brush(b) {
+    const r = b.r, x0 = Math.max(0, Math.floor(Math.min(b.ax, b.bx) - r)), x1 = Math.min(w - 1, Math.ceil(Math.max(b.ax, b.bx) + r));
+    const y0 = Math.max(0, Math.floor(Math.min(b.ay, b.by) - r)), y1 = Math.min(h - 1, Math.ceil(Math.max(b.ay, b.by) + r));
+    const abx = b.bx - b.ax, aby = b.by - b.ay, ll = Math.max(abx * abx + aby * aby, 1e-6);
+    for (let y = y0; y <= y1; y++) for (let x = x0; x <= x1; x++) {
+      const px = x + 0.5 - b.ax, py = y + 0.5 - b.ay, t = Math.min(1, Math.max(0, (px * abx + py * aby) / ll));
+      const d = Math.hypot(px - abx * t, py - aby * t);
+      if (d < r) { const i = y * w + x; if (b.mode < 1.5) { u[i] = 0.5; v[i] = Math.max(v[i], 0.25 + 0.2 * (1 - d / r)); } else { u[i] = 1; v[i] = 0; } }
+    }
+  }
+  return {
+    kind: "CPU fallback", w, h,
+    seed(d) { for (let i = 0; i < w * h; i++) { u[i] = d[i * 4]; v[i] = d[i * 4 + 1]; } },
+    step(n, b) {
+      if (b) brush(b);
+      for (let x = 0; x < w; x++) Fx[x] = S.sweep ? SW.F0 + (SW.F1 - SW.F0) * (x + 0.5) / w : S.F;
+      for (let y = 0; y < h; y++) ky[y] = S.sweep ? SW.k0 + (SW.k1 - SW.k0) * (y + 0.5) / h : S.k;
+      const wr = !S.sweep;
+      for (let s = 0; s < n; s++) {
+        for (let y = 0; y < h; y++) {
+          const ym = (y > 0 ? y - 1 : (wr ? h - 1 : 0)) * w, yp = (y < h - 1 ? y + 1 : (wr ? 0 : h - 1)) * w, yc = y * w, k = ky[y];
+          for (let x = 0; x < w; x++) {
+            const xm = x > 0 ? x - 1 : (wr ? w - 1 : 0), xp = x < w - 1 ? x + 1 : (wr ? 0 : w - 1), i = yc + x;
+            const cu = u[i], cv = v[i];
+            const lu = 0.2 * (u[yc + xm] + u[yc + xp] + u[ym + x] + u[yp + x]) + 0.05 * (u[ym + xm] + u[ym + xp] + u[yp + xm] + u[yp + xp]) - cu;
+            const lv = 0.2 * (v[yc + xm] + v[yc + xp] + v[ym + x] + v[yp + x]) + 0.05 * (v[ym + xm] + v[ym + xp] + v[yp + xm] + v[yp + xp]) - cv;
+            const r = cu * cv * cv, F = Fx[x];
+            u2[i] = Math.min(1, Math.max(0, cu + lu - r + F * (1 - cu)));
+            v2[i] = Math.min(1, Math.max(0, cv + 0.5 * lv + r - (F + k) * cv));
+          }
+        }
+        let t = u; u = u2; u2 = t; t = v; v = v2; v2 = t;
+      }
+    },
+    render() {
+      if (lutFor !== S.palette) {
+        const p = PALETTES[S.palette].map(hex);
+        for (let i = 0; i < 256; i++) { const x = i / 255 * 4, j = Math.min(3, Math.floor(x)), f = x - j; for (let c = 0; c < 3; c++) lut[i * 3 + c] = 255 * (p[j][c] + (p[j + 1][c] - p[j][c]) * f); }
+        lutFor = S.palette;
+      }
+      const L = lightVec(), hx = L[0] + 0, hy = L[1], hz = L[2] + 1, hl = Math.hypot(hx, hy, hz), D = img.data, rel = S.relief;
+      for (let y = 0; y < h; y++) {
+        const ym = Math.max(0, y - 1) * w, yp = Math.min(h - 1, y + 1) * w, row = (h - 1 - y) * w;
+        for (let x = 0; x < w; x++) {
+          const i = y * w + x, vv = v[i];
+          const dx = (v[y * w + Math.min(w - 1, x + 1)] - v[y * w + Math.max(0, x - 1)]) * rel, dy = (v[yp + x] - v[ym + x]) * rel;
+          const nl = Math.hypot(dx, dy, 1), dif = Math.max(0, (-dx * L[0] - dy * L[1] + L[2]) / nl);
+          const sp = rel > 0.01 ? Math.pow(Math.max(0, (-dx * hx - dy * hy + hz) / (nl * hl)), 48) * 0.3 * Math.min(1, Math.max(0, (vv - 0.04) / 0.21)) : 0;
+          const sh = 0.5 + 0.62 * dif / Math.max(L[2], 0.35) * 0.6 + 0.12, li = Math.min(255, vv * 2.5 * 255 | 0) * 3, o = (row + x) * 4;
+          D[o] = lut[li] * sh + sp * 255; D[o + 1] = lut[li + 1] * sh + sp * 255; D[o + 2] = lut[li + 2] * sh + sp * 255; D[o + 3] = 255;
+        }
+      }
+      ctx.putImageData(img, 0, 0);
+    },
+    resize() {}
+  };
+}
+
+// ---------- app ----------
+let view = $("view"), E = null;
+function init() {
+  const N = small ? 256 : 384;
+  E = makeGPU(view, N, N);
+  if (!E) {
+    const c = view.cloneNode(false); view.replaceWith(c); view = c;
+    E = makeCPU(view, small ? 112 : 144, small ? 112 : 144);
+  }
+  $("mode").textContent = "Running on " + E.kind + ", " + E.w + "×" + E.h + " cells.";
+  E.resize();
+  buildPresets(); bindUI(); drawMap(); syncUI();
+  reseed(E.kind[0] === "G" ? 1400 : 700);
+  addEventListener("resize", () => { E.resize(); drawMap(); E.render(); });
+  requestAnimationFrame(frame);
+}
+function reseed(pre) { E.seed(makeSeed(E.w, E.h, S.sweep ? 1.6 : 0.9)); if (pre) E.step(pre, null); E.render(); }
+function clearDish() { E.seed(makeSeed(E.w, E.h, 0)); E.render(); }
+
+let stepCount = 0, lastT = 0, spsT = 0;
+const ptr = { down: false, mode: 1, ax: 0, ay: 0, bx: 0, by: 0, moved: false };
+const seg = { ax: 0, ay: 0, bx: 0, by: 0, r: 0, mode: 1 };
+function frame(t) {
+  requestAnimationFrame(frame);
+  let b = null;
+  if (ptr.down && !S.sweep) {
+    seg.ax = ptr.ax; seg.ay = ptr.ay; seg.bx = ptr.bx; seg.by = ptr.by; seg.mode = ptr.mode;
+    seg.r = S.brush * E.w / 384; b = seg; ptr.ax = ptr.bx; ptr.ay = ptr.by;
+  }
+  const n = S.paused ? (b ? 1 : 0) : (E.kind[0] === "G" ? S.speed : Math.max(2, S.speed >> 2));
+  if (n) { E.step(n, b); E.render(); stepCount += n; }
+  if (t - spsT > 500) { $("sps").textContent = Math.round(stepCount * 1000 / Math.max(1, t - spsT)) + " steps/s"; stepCount = 0; spsT = t; }
+}
+function toTexel(e) {
+  const r = view.getBoundingClientRect();
+  return [(e.clientX - r.left) / r.width * E.w, (1 - (e.clientY - r.top) / r.height) * E.h];
+}
+function sweepFK(e) {
+  const r = view.getBoundingClientRect(), x = (e.clientX - r.left) / r.width, y = 1 - (e.clientY - r.top) / r.height;
+  return [SW.F0 + (SW.F1 - SW.F0) * x, SW.k0 + (SW.k1 - SW.k0) * y];
+}
+
+// ---------- parameter map ----------
+const mapC = $("map"), mctx = mapC.getContext("2d");
+function mapXY(k, F) { const w = mapC.clientWidth, h = mapC.clientHeight; return [28 + (k - MAP.k0) / (MAP.k1 - MAP.k0) * (w - 36), h - 22 - (F - MAP.F0) / (MAP.F1 - MAP.F0) * (h - 30)]; }
+function mapFK(x, y) { const w = mapC.clientWidth, h = mapC.clientHeight;
+  return [Math.min(MAP.F1, Math.max(0.002, MAP.F0 + (h - 22 - y) / (h - 30) * (MAP.F1 - MAP.F0))), Math.min(MAP.k1, Math.max(MAP.k0, MAP.k0 + (x - 28) / (w - 36) * (MAP.k1 - MAP.k0)))]; }
+function nearestPearson() { let best = null, bd = 1e9; for (const p of PEARSON) { const d = Math.hypot((p[1] - S.F) / 0.09, (p[2] - S.k) / 0.032); if (d < bd) { bd = d; best = p; } } return best[0]; }
+function drawMap() {
+  const d = Math.min(devicePixelRatio || 1, 2), w = mapC.clientWidth, h = mapC.clientHeight;
+  if (mapC.width !== Math.round(w * d)) { mapC.width = Math.round(w * d); mapC.height = Math.round(h * d); }
+  const c = mctx; c.setTransform(d, 0, 0, d, 0, 0); c.clearRect(0, 0, w, h);
+  c.font = "10px 'JetBrains Mono', monospace"; c.lineWidth = 1;
+  // grid and ticks
+  c.strokeStyle = "#22302f"; c.fillStyle = "#8fa29d"; c.textAlign = "center";
+  for (let k = 0.04; k <= 0.0721; k += 0.008) { const [x] = mapXY(k, 0); c.beginPath(); c.moveTo(x, 6); c.lineTo(x, h - 22); c.stroke(); c.fillText(k.toFixed(3).slice(1), x, h - 9); }
+  c.textAlign = "right";
+  for (let F = 0; F <= 0.0901; F += 0.03) { const [, y] = mapXY(0, F); c.beginPath(); c.moveTo(28, y); c.lineTo(w - 8, y); c.stroke(); c.fillText(F.toFixed(2).slice(1), 25, y + 3); }
+  c.textAlign = "left"; c.fillText("k →", w - 34, h - 26); c.fillText("F ↑", 31, 14);
+  // saddle-node curve k = sqrt(F)/2 - F
+  c.strokeStyle = "rgba(226,168,103,.55)"; c.lineWidth = 1.5; c.beginPath();
+  for (let i = 0; i <= 120; i++) { const F = MAP.F1 * i / 120, k = Math.sqrt(F) / 2 - F, [x, y] = mapXY(k, F); if (k < MAP.k0) { c.moveTo(x, y); continue; } i && k >= MAP.k0 ? c.lineTo(x, y) : c.moveTo(x, y); }
+  c.stroke();
+  // Pearson classes
+  c.font = "italic 12px Fraunces, Georgia, serif"; c.fillStyle = "rgba(159,210,189,.55)"; c.textAlign = "center";
+  for (const [g, F, k] of PEARSON) { const [x, y] = mapXY(k, F); c.fillText(g, x, y + 4); }
+  // presets
+  c.font = "500 10px Manrope, sans-serif";
+  for (const p of PRESETS) {
+    const [x, y] = mapXY(p.k, p.F), on = p.id === S.preset;
+    c.fillStyle = on ? "#9fd2bd" : "#e6e1d4"; c.beginPath(); c.arc(x, y, on ? 3.5 : 2.5, 0, 7); c.fill();
+    c.textAlign = x > w - 70 ? "right" : "left"; c.fillStyle = on ? "#9fd2bd" : "rgba(230,225,212,.8)";
+    c.fillText(p.name.toLowerCase(), x + (c.textAlign === "left" ? 6 : -6), y - 4);
+  }
+  // crosshair
+  if (!S.sweep) {
+    const [x, y] = mapXY(S.k, S.F); c.strokeStyle = "#e2a867"; c.lineWidth = 1; c.setLineDash([3, 3]);
+    c.beginPath(); c.moveTo(x, 6); c.lineTo(x, h - 22); c.moveTo(28, y); c.lineTo(w - 8, y); c.stroke(); c.setLineDash([]);
+    c.beginPath(); c.arc(x, y, 6, 0, 7); c.stroke();
+  } else {
+    const [x0, y0] = mapXY(SW.k0, SW.F1), [x1, y1] = mapXY(SW.k1, SW.F0);
+    c.strokeStyle = "#e2a867"; c.setLineDash([4, 3]); c.strokeRect(x0, y0, x1 - x0, y1 - y0); c.setLineDash([]);
+  }
+}
+function setFK(F, k, preset) {
+  S.F = +F.toFixed(4); S.k = +k.toFixed(4); S.preset = preset || null;
+  if (S.sweep) setSweep(false, true);
+  syncUI();
+}
+function syncUI() {
+  $("fv").textContent = S.F.toFixed(4); $("kv").textContent = S.k.toFixed(4);
+  $("near").textContent = "near Pearson " + nearestPearson();
+  mapC.setAttribute("aria-valuetext", "F " + S.F.toFixed(4) + ", k " + S.k.toFixed(4) + (S.preset ? ", " + PRESETS.find(p => p.id === S.preset).name : ""));
+  document.querySelectorAll("#presets button").forEach(b => b.setAttribute("aria-pressed", b.dataset.id === S.preset));
+  $("pause").setAttribute("aria-pressed", S.paused); $("pause").textContent = S.paused ? "Resume" : "Pause";
+  $("sweep").setAttribute("aria-pressed", S.sweep);
+  $("tag").textContent = S.sweep ? "Sweep · click a spot to grow it" : (S.preset ? PRESETS.find(p => p.id === S.preset).name : "Custom") + (S.paused ? " · paused" : "");
+  $("axX").hidden = $("axY").hidden = !S.sweep; if (!S.sweep) $("axH").hidden = true;
+  drawMap();
+}
+function setSweep(on, keep) {
+  S.sweep = on; if (on) S.preset = null;
+  reseed(on ? (E.kind[0] === "G" ? 1500 : 900) : (keep ? 300 : 900));
+  syncUI();
+}
+function choosePreset(p) { S.F = p.F; S.k = p.k; S.preset = p.id; S.sweep = false; reseed(E.kind[0] === "G" ? 400 : 250); syncUI(); }
+
+function buildPresets() {
+  const box = $("presets");
+  PRESETS.forEach((p, i) => {
+    const b = document.createElement("button"); b.dataset.id = p.id; b.type = "button";
+    b.innerHTML = "<span>" + p.name + "</span><small>" + (i + 1) + "</small>";
+    b.title = "F " + p.F + ", k " + p.k; b.onclick = () => choosePreset(p); box.appendChild(b);
+  });
+}
+function bindUI() {
+  const slider = (id, key, fmt) => { const el = $(id), o = $(id + "O"); el.value = S[key]; o.textContent = fmt(S[key]); el.addEventListener("input", () => { S[key] = +el.value; o.textContent = fmt(S[key]); if (S.paused) E.render(); }); };
+  slider("brush", "brush", v => v); slider("speed", "speed", v => v); slider("az", "az", v => v + "°"); slider("el", "el", v => v + "°"); slider("relief", "relief", v => v);
+  $("palette").value = S.palette;
+  $("palette").addEventListener("change", e => { S.palette = e.target.value; try { localStorage.setItem("turing-palette", S.palette); } catch (er) {} E.render(); });
+  $("pause").onclick = () => { S.paused = !S.paused; syncUI(); };
+  $("seed").onclick = () => reseed(0);
+  $("clear").onclick = () => clearDish();
+  $("sweep").onclick = () => setSweep(!S.sweep);
+  view.addEventListener("contextmenu", e => e.preventDefault());
+  view.addEventListener("pointerdown", e => {
+    if (S.sweep) { const [F, k] = sweepFK(e); setFK(F, k); return; }
+    view.setPointerCapture(e.pointerId); ptr.down = true; ptr.mode = (e.button === 2 || e.shiftKey) ? 2 : 1;
+    [ptr.ax, ptr.ay] = toTexel(e); ptr.bx = ptr.ax; ptr.by = ptr.ay; e.preventDefault();
+  });
+  view.addEventListener("pointermove", e => {
+    if (S.sweep) { const [F, k] = sweepFK(e), h = $("axH"); h.hidden = false; h.textContent = "F " + F.toFixed(4) + " · k " + k.toFixed(4); return; }
+    if (ptr.down) { [ptr.bx, ptr.by] = toTexel(e); ptr.mode = (e.buttons & 2 || e.shiftKey) ? 2 : 1; }
+  });
+  const up = () => { ptr.down = false; };
+  view.addEventListener("pointerup", up); view.addEventListener("pointercancel", up);
+  view.addEventListener("pointerleave", () => { if (S.sweep) $("axH").hidden = true; });
+  let mdrag = false;
+  const mpick = e => { const r = mapC.getBoundingClientRect(), [F, k] = mapFK(e.clientX - r.left, e.clientY - r.top); setFK(F, k); };
+  mapC.addEventListener("pointerdown", e => { mdrag = true; mapC.setPointerCapture(e.pointerId); mpick(e); e.preventDefault(); });
+  mapC.addEventListener("pointermove", e => { if (mdrag) mpick(e); });
+  mapC.addEventListener("pointerup", () => { mdrag = false; }); mapC.addEventListener("pointercancel", () => { mdrag = false; });
+  mapC.addEventListener("keydown", e => {
+    const s = e.shiftKey ? 0.0025 : 0.0005, d = { ArrowLeft: [0, -s], ArrowRight: [0, s], ArrowUp: [s, 0], ArrowDown: [-s, 0] }[e.key];
+    if (!d) return; e.preventDefault(); e.stopPropagation();
+    setFK(Math.min(MAP.F1, Math.max(0.002, S.F + d[0])), Math.min(MAP.k1, Math.max(MAP.k0, S.k + d[1])));
+  });
+  addEventListener("keydown", e => {
+    const tg = e.target.tagName; if (e.ctrlKey || e.metaKey || e.altKey || tg === "SELECT" || (tg === "INPUT" && e.key !== " ")) return;
+    const key = e.key.toLowerCase();
+    if (key === " " && tg !== "BUTTON") { e.preventDefault(); $("pause").click(); }
+    else if (key === "r") reseed(0);
+    else if (key === "c") clearDish();
+    else if (key === "s") setSweep(!S.sweep);
+    else if (key === "[" || key === "]") { S.brush = Math.min(40, Math.max(2, S.brush + (key === "]" ? 2 : -2))); $("brush").value = S.brush; $("brushO").textContent = S.brush; }
+    else if (key >= "1" && key <= "8") choosePreset(PRESETS[+key - 1]);
+  });
+}
+// probe hooks
+window.TG = { S, PRESETS, step: n => E.step(n, null), render: () => E.render(), reseed, choosePreset, setSweep, engine: () => E, view: () => view };
+addEventListener("DOMContentLoaded", init);
+</script>
+</body>
+</html>
