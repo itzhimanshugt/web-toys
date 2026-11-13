@@ -1,0 +1,745 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>Bulb Dive</title>
+<meta name="description" content="A real-time raymarched explorer for the Mandelbulb, Mandelbox, Menger sponge and quaternion Julia fractals, with orbit, deep zoom, fly-to and autopilot.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Syne:wght@600;800&family=Manrope:wght@400;600&display=swap" rel="stylesheet">
+<style>
+/* Layout: header strip, then the render view as hero with a 300px instrument panel on the right (stacked under the view below 820px). */
+:root {
+  --abyss: #0a1114;   /* teal-biased near black, the void around the fractal */
+  --hull: #131d22;    /* panel surface */
+  --seam: #26353c;    /* hairlines and slider tracks */
+  --bone: #e8e1d2;    /* primary text */
+  --fathom: #8a9ca3;  /* secondary text */
+  --brass: #d9a54e;   /* primary accent: active controls, numbers */
+  --verdigris: #5fb8a8; /* secondary accent: focus, live state */
+  --display: "Syne", "Trebuchet MS", "Segoe UI", sans-serif;
+  --ui: "Manrope", "Segoe UI", "Helvetica Neue", sans-serif;
+  --mono: var(--ui);
+  color-scheme: dark;
+}
+* { box-sizing: border-box; }
+html, body { height: 100%; }
+body {
+  margin: 0;
+  background: var(--abyss);
+  color: var(--bone);
+  font: 14px/1.45 var(--ui);
+  padding-top: env(safe-area-inset-top, 0px);
+  padding-bottom: env(safe-area-inset-bottom, 0px);
+}
+.wrap {
+  display: flex; flex-direction: column; gap: 12px;
+  min-height: 100%;
+  padding-left: max(16px, env(safe-area-inset-left, 0px));
+  padding-right: max(16px, env(safe-area-inset-right, 0px));
+  padding-block: 14px 16px;
+}
+header { display: flex; align-items: baseline; gap: 16px; flex-wrap: wrap; }
+h1 {
+  margin: 0; font: 800 28px/1 var(--display); letter-spacing: 0.01em;
+  text-wrap: balance;
+}
+.tag { margin: 0; color: var(--fathom); min-width: 0; }
+.main { display: grid; grid-template-columns: minmax(0, 1fr) 300px; gap: 12px; flex: 1; min-height: 0; }
+.stage {
+  position: relative; min-width: 0; min-height: 420px; height: calc(100vh - 92px);
+  border: 1px solid var(--seam); border-radius: 4px; overflow: hidden; background: #05090b;
+}
+#view { position: absolute; inset: 0; width: 100%; height: 100%; display: block; touch-action: none; cursor: grab; }
+#view:active { cursor: grabbing; }
+#view:focus-visible { outline: 2px solid var(--verdigris); outline-offset: -2px; }
+.hud { position: absolute; pointer-events: none; font: 12px/1.5 var(--mono); font-variant-numeric: tabular-nums; }
+.formula { top: 10px; left: 12px; right: 12px; color: var(--bone); }
+.formula b { display: block; font: 600 12px/1.4 var(--ui); color: var(--brass); }
+.stats {
+  bottom: 10px; left: 12px; display: grid; grid-template-columns: auto auto; gap: 0 12px;
+  background: rgba(10, 17, 20, 0.72); padding: 6px 10px; border-radius: 3px; border: 1px solid rgba(38, 53, 60, 0.9);
+}
+.stats dt { color: var(--fathom); }
+.stats dd { margin: 0; color: var(--brass); text-align: right; }
+.hint { bottom: 10px; right: 12px; color: var(--fathom); text-align: right; max-width: 46%; }
+#nogl {
+  position: absolute; inset: 0; display: none; place-content: center; padding: 24px; text-align: center; gap: 8px;
+  background: var(--abyss);
+}
+#nogl h2 { margin: 0; font: 800 20px var(--display); color: var(--brass); }
+#nogl p { margin: 0; color: var(--fathom); max-width: 40ch; }
+.panel { display: flex; flex-direction: column; gap: 14px; min-width: 0; }
+fieldset { margin: 0; padding: 12px; border: 1px solid var(--seam); border-radius: 4px; background: var(--hull); min-width: 0; display: grid; gap: 10px; }
+legend { padding: 0 6px; font: 600 12px/1 var(--ui); color: var(--fathom); }
+label { display: grid; gap: 4px; font-size: 12px; color: var(--fathom); min-width: 0; }
+.row { display: flex; justify-content: space-between; gap: 8px; }
+.row output { font: 600 12px var(--mono); color: var(--brass); font-variant-numeric: tabular-nums; }
+select, button {
+  font: 600 13px var(--ui); color: var(--bone); background: var(--abyss);
+  border: 1px solid var(--seam); border-radius: 3px; padding: 7px 9px; min-width: 0;
+}
+select { width: 100%; }
+button { cursor: pointer; }
+button:hover, select:hover { border-color: var(--fathom); }
+button[aria-pressed="true"] { background: var(--brass); color: var(--abyss); border-color: var(--brass); }
+:focus-visible { outline: 2px solid var(--verdigris); outline-offset: 2px; }
+.btns { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 6px; }
+input[type=range] { width: 100%; accent-color: var(--brass); margin: 2px 0; }
+.note { margin: 0; font-size: 12.5px; color: var(--fathom); }
+.note strong { color: var(--bone); font-weight: 600; }
+#saved { font: 11px var(--mono); color: var(--verdigris); min-height: 1.4em; margin: 0; }
+@media (max-width: 820px) {
+  .main { grid-template-columns: minmax(0, 1fr); }
+  .stage { height: 62vh; min-height: 340px; }
+  .hint { display: none; }
+}
+@media (max-width: 600px) {
+  h1 { font-size: 22px; }
+  .formula { font-size: 11px; }
+  .stats { font-size: 11px; }
+}
+body { font-variant-numeric: tabular-nums; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <h1>Bulb Dive</h1>
+    <p class="tag">Sphere-traced 3D fractals. Drag to orbit, scroll or pinch to dive, double-click to fly.</p>
+  </header>
+  <div class="main">
+    <div class="stage">
+      <canvas id="view" tabindex="0" aria-label="Fractal view. Arrow keys orbit, plus and minus zoom, Enter flies toward the centre, A toggles autopilot."></canvas>
+      <div class="hud formula" id="formula" aria-live="polite"></div>
+      <dl class="hud stats">
+        <dt id="pname">power</dt><dd id="sPow">8.00</dd>
+        <dt>surface</dt><dd id="sDist">0</dd>
+        <dt>ray steps</dt><dd id="sSteps">0</dd>
+        <dt>frame</dt><dd id="sMs">0</dd>
+        <dt>pixels</dt><dd id="sRes">0</dd>
+      </dl>
+      <div class="hud hint">Keys: arrows orbit, + / - dive, Enter fly, A autopilot, R reset</div>
+      <div id="nogl" role="alert"><h2>WebGL is unavailable</h2><p id="noglMsg">This browser could not create a WebGL context, so the fractal cannot be drawn. Try enabling hardware acceleration or another browser.</p></div>
+    </div>
+    <div class="panel">
+      <fieldset>
+        <legend>Fractal</legend>
+        <label for="fractal">Subject
+          <select id="fractal">
+            <option value="0">Mandelbulb</option>
+            <option value="1">Mandelbox</option>
+            <option value="2">Menger sponge</option>
+            <option value="3">Quaternion Julia</option>
+          </select>
+        </label>
+        <label for="param"><span class="row"><span id="paramLabel">Power n</span><output id="paramOut" for="param">8.0</output></span>
+          <input type="range" id="param" min="2" max="16" step="0.05" value="8">
+        </label>
+        <p class="note" id="note"></p>
+      </fieldset>
+      <fieldset>
+        <legend>Render</legend>
+        <label for="palette">Orbit-trap palette
+          <select id="palette">
+            <option value="0">Brass and verdigris</option>
+            <option value="1">Ember</option>
+            <option value="2">Glacier</option>
+            <option value="3">Spectrum</option>
+          </select>
+        </label>
+        <label for="quality">Quality
+          <select id="quality">
+            <option value="0">Low: 70 steps, no shadows</option>
+            <option value="1">Medium: 120 steps, soft shadows</option>
+            <option value="2">High: 200 steps, full resolution</option>
+          </select>
+        </label>
+      </fieldset>
+      <fieldset>
+        <legend>Camera</legend>
+        <div class="btns">
+          <button type="button" id="auto" aria-pressed="false">Autopilot</button>
+          <button type="button" id="save">Save view</button>
+          <button type="button" id="reset">Reset</button>
+        </div>
+        <p id="saved" aria-live="polite"></p>
+        <p class="note">Rendered by <strong>sphere tracing</strong> (Hart, 1996): each ray advances by the distance estimate, a radius guaranteed to contain no surface, so it can approach detail of any size without overshooting.</p>
+      </fieldset>
+    </div>
+  </div>
+</div>
+<script>
+(function () {
+"use strict";
+var cvs = document.getElementById("view");
+var $ = function (id) { return document.getElementById(id); };
+var phone = matchMedia("(max-width: 600px)").matches;
+var reduced = matchMedia("(prefers-reduced-motion: reduce)").matches;
+
+// ---- fractal definitions --------------------------------------------------
+var FR = [
+  { name: "Mandelbulb", label: "Power n", min: 2, max: 16, step: 0.05, def: 8, R: 2.0, home: [0.62, 0.32, 2.7],
+    formula: "z → zⁿ + c,  (r, θ, φ) ↦ (rⁿ, nθ, nφ)<br>DE = ½ · r · ln r / dr",
+    note: "<strong>Daniel White and Paul Nylander</strong> described this spherical-coordinate power formula in 2009. Power 8 gives the classic bulb; lower powers give smoother, lumpier bodies." },
+  { name: "Mandelbox", label: "Scale s", min: -3, max: -1.4, step: 0.01, def: -1.8, R: 0, home: [0.7, 0.42, 0],
+    formula: "z → s · sphereFold(boxFold(z)) + c<br>DE = |z| / |dr|",
+    note: "<strong>Tom Lowe</strong> found the Mandelbox in 2010. Each step folds space at the faces of a cube, inverts it inside a sphere, then scales it by s." },
+  { name: "Menger sponge", label: "Level k", min: 1, max: 6, step: 1, def: 4, R: 1.75, home: [0.66, 0.5, 3.4],
+    formula: "cube minus 20-cube recursion, k levels<br>DE = max(box, −cross / 3ᵏ)",
+    note: "<strong>Karl Menger</strong> described the sponge in 1926. Each level keeps 20 of 27 sub-cubes, so its Hausdorff dimension is ln 20 / ln 3 ≈ 2.727." },
+  { name: "Quaternion Julia", label: "Phase of c", min: 0, max: 6.28, step: 0.01, def: 1.1, R: 2.0, home: [0.5, 0.3, 2.9],
+    formula: "q → q² + c,  q, c ∈ ℍ (slice w = 0)<br>DE = ½ · |q| · ln|q| / |q′|",
+    note: "Quaternions are <strong>Hamilton's</strong> 1843 four-dimensional numbers. This is a 3D slice of a 4D Julia set, a subject first ray-traced by Hart, Sandin and Kauffman in 1989." }
+];
+var PAL = [ // cosine palettes a + b cos(2pi(c t + d))
+  [[0.52, 0.45, 0.34], [0.42, 0.36, 0.28], [1.0, 1.0, 1.0], [0.02, 0.12, 0.28]],
+  [[0.55, 0.32, 0.20], [0.50, 0.32, 0.22], [0.9, 0.9, 0.6], [0.0, 0.08, 0.16]],
+  [[0.42, 0.55, 0.62], [0.36, 0.34, 0.32], [1.0, 1.0, 1.0], [0.55, 0.6, 0.66]],
+  [[0.5, 0.5, 0.5], [0.5, 0.5, 0.5], [1.0, 1.0, 1.0], [0.0, 0.33, 0.67]]
+];
+// steps, shadow steps, iteration [bulb, box, -, julia], full scale, moving scale
+var QUAL = [
+  { steps: 70, shadow: 0, it: [6, 10, 0, 8], full: 0.6, move: 0.3 },
+  { steps: 120, shadow: 20, it: [8, 13, 0, 10], full: 0.85, move: 0.4 },
+  { steps: 200, shadow: 40, it: [10, 16, 0, 12], full: 1.0, move: 0.5 }
+];
+
+var S = { type: 0, param: 8, pal: 0, q: phone ? 0 : 1 };
+var cam = { pos: [0, 0, 3], yaw: 0, pitch: 0, dist: 3 };
+var juliaC = [0, 0, 0, 0];
+
+function boxR(s) { s = Math.abs(s); return 2 * (s + 1) / (s - 1); }
+function radius() { return S.type === 1 ? boxR(S.param) : FR[S.type].R; }
+function setJuliaC() {
+  var o = [0.5, 3.9, 1.4, 1.1], f = [1.2, 1.7, 1.3, 2.5];
+  for (var i = 0; i < 4; i++) juliaC[i] = 0.45 * Math.cos(o[i] + S.param * f[i]);
+  juliaC[0] -= 0.3;
+}
+
+// ---- JS distance estimators (mirror the shader; used for zoom speed, fly-to, autopilot, readouts) ----
+function deBulb(x, y, z) {
+  var n = S.param, it = QUAL[S.q].it[0], zx = x, zy = y, zz = z, dr = 1, r = 0;
+  for (var i = 0; i < it; i++) {
+    r = Math.sqrt(zx * zx + zy * zy + zz * zz);
+    if (r > 2) break;
+    r = Math.max(r, 1e-9);
+    var th = Math.acos(Math.max(-1, Math.min(1, zz / r))) * n, ph = Math.atan2(zy, zx) * n;
+    dr = Math.pow(r, n - 1) * n * dr + 1;
+    var zr = Math.pow(r, n), st = Math.sin(th);
+    zx = zr * st * Math.cos(ph) + x; zy = zr * st * Math.sin(ph) + y; zz = zr * Math.cos(th) + z;
+  }
+  r = Math.sqrt(zx * zx + zy * zy + zz * zz);
+  return 0.5 * Math.log(r) * r / dr;
+}
+function deBox(x, y, z) {
+  var s = S.param, it = QUAL[S.q].it[1], zx = x, zy = y, zz = z, dr = 1;
+  for (var i = 0; i < it; i++) {
+    zx = Math.max(-1, Math.min(1, zx)) * 2 - zx; zy = Math.max(-1, Math.min(1, zy)) * 2 - zy; zz = Math.max(-1, Math.min(1, zz)) * 2 - zz;
+    var r2 = zx * zx + zy * zy + zz * zz;
+    if (r2 < 0.25) { zx *= 4; zy *= 4; zz *= 4; dr *= 4; } else if (r2 < 1) { zx /= r2; zy /= r2; zz /= r2; dr /= r2; }
+    zx = zx * s + x; zy = zy * s + y; zz = zz * s + z; dr = dr * Math.abs(s) + 1;
+  }
+  return Math.sqrt(zx * zx + zy * zy + zz * zz) / Math.abs(dr);
+}
+function sdBox(x, y, z, b) {
+  var dx = Math.abs(x) - b, dy = Math.abs(y) - b, dz = Math.abs(z) - b;
+  var mx = Math.max(dx, 0), my = Math.max(dy, 0), mz = Math.max(dz, 0);
+  return Math.min(Math.max(dx, Math.max(dy, dz)), 0) + Math.sqrt(mx * mx + my * my + mz * mz);
+}
+function fmod2(v) { return v - 2 * Math.floor(v / 2); }
+function deMenger(x, y, z) {
+  var d = sdBox(x, y, z, 1), s = 1, lev = Math.round(S.param);
+  for (var m = 0; m < lev; m++) {
+    var ax = fmod2(x * s) - 1, ay = fmod2(y * s) - 1, az = fmod2(z * s) - 1;
+    s *= 3;
+    var rx = Math.abs(1 - 3 * Math.abs(ax)), ry = Math.abs(1 - 3 * Math.abs(ay)), rz = Math.abs(1 - 3 * Math.abs(az));
+    var da = Math.max(rx, ry), db = Math.max(ry, rz), dc = Math.max(rz, rx);
+    var c = (Math.min(da, Math.min(db, dc)) - 1) / s;
+    if (c > d) d = c;
+  }
+  return d;
+}
+function deJulia(x, y, z) {
+  var it = QUAL[S.q].it[3], a = x, b = y, c = z, w = 0, md2 = 1, mz2 = a * a + b * b + c * c;
+  for (var i = 0; i < it; i++) {
+    md2 *= 4 * mz2;
+    var na = a * a - b * b - c * c - w * w + juliaC[0];
+    b = 2 * a * b + juliaC[1]; c = 2 * a * c + juliaC[2]; w = 2 * a * w + juliaC[3]; a = na;
+    mz2 = a * a + b * b + c * c + w * w;
+    if (mz2 > 4) break;
+  }
+  return 0.25 * Math.sqrt(mz2 / md2) * Math.log(mz2);
+}
+function DE(p) {
+  var x = p[0], y = p[1], z = p[2];
+  if (S.type === 0) return deBulb(x, z, y); // polar axis of the bulb points up the screen
+  if (S.type === 1) return deBox(x, y, z);
+  if (S.type === 2) return deMenger(x, y, z);
+  return deJulia(x, y, z);
+}
+function grad(p, e, out) {
+  var a = p[0], b = p[1], c = p[2];
+  out[0] = DE([a + e, b, c]) - DE([a - e, b, c]);
+  out[1] = DE([a, b + e, c]) - DE([a, b - e, c]);
+  out[2] = DE([a, b, c + e]) - DE([a, b, c - e]);
+  var l = Math.hypot(out[0], out[1], out[2]) || 1;
+  out[0] /= l; out[1] /= l; out[2] /= l;
+  return out;
+}
+
+// ---- camera maths ----------------------------------------------------------
+function fwdOf(yaw, pitch) { return [Math.sin(yaw) * Math.cos(pitch), Math.sin(pitch), Math.cos(yaw) * Math.cos(pitch)]; }
+function basis() {
+  var f = fwdOf(cam.yaw, cam.pitch);
+  var r = [f[2], 0, -f[0]], rl = Math.hypot(r[0], r[2]) || 1; // cross(f, up)
+  r[0] /= -rl; r[2] /= -rl;
+  var u = [r[1] * f[2] - r[2] * f[1], r[2] * f[0] - r[0] * f[2], r[0] * f[1] - r[1] * f[0]];
+  return { f: f, r: r, u: u };
+}
+function pivot() { var f = fwdOf(cam.yaw, cam.pitch); return [cam.pos[0] + f[0] * cam.dist, cam.pos[1] + f[1] * cam.dist, cam.pos[2] + f[2] * cam.dist]; }
+function placeAround(pv) { var f = fwdOf(cam.yaw, cam.pitch); cam.pos = [pv[0] - f[0] * cam.dist, pv[1] - f[1] * cam.dist, pv[2] - f[2] * cam.dist]; }
+function lookFromYawPitch(f) { cam.pitch = Math.asin(Math.max(-0.999, Math.min(0.999, f[1]))); cam.yaw = Math.atan2(f[0], f[2]); }
+function home() {
+  var h = FR[S.type].home, d = S.type === 1 ? boxR(S.param) * 1.75 : h[2];
+  cam.dist = d; cam.yaw = h[0] + Math.PI; cam.pitch = -h[1];
+  placeAround([0, 0, 0]);
+}
+var FOVK = 1.0; // 2 * tan(fov / 2), fov about 53 degrees
+function rayDir(px, py, w, h) {
+  var b = basis(), ux = (px - 0.5 * w) / h * FOVK, uy = (0.5 * h - py) / h * FOVK;
+  var d = [b.f[0] + b.r[0] * ux + b.u[0] * uy, b.f[1] + b.r[1] * ux + b.u[1] * uy, b.f[2] + b.r[2] * ux + b.u[2] * uy];
+  var l = Math.hypot(d[0], d[1], d[2]);
+  return [d[0] / l, d[1] / l, d[2] / l];
+}
+// march one ray in JS; returns {t, steps, hit}
+function march(ro, rd, pix) {
+  var t = 0, R = radius(), max = QUAL[S.q].steps, p = [0, 0, 0];
+  var bb = ro[0] * rd[0] + ro[1] * rd[1] + ro[2] * rd[2], cc = ro[0] * ro[0] + ro[1] * ro[1] + ro[2] * ro[2] - R * R, disc = bb * bb - cc;
+  if (disc < 0) return { t: 0, steps: 0, hit: false };
+  var t0 = -bb - Math.sqrt(disc), t1 = -bb + Math.sqrt(disc);
+  if (t1 < 0) return { t: 0, steps: 0, hit: false };
+  t = Math.max(t0, 0);
+  for (var i = 0; i < max; i++) {
+    p[0] = ro[0] + rd[0] * t; p[1] = ro[1] + rd[1] * t; p[2] = ro[2] + rd[2] * t;
+    var d = DE(p);
+    if (d < pix * t + 1e-6) return { t: t, steps: i + 1, hit: true };
+    t += d * 0.85;
+    if (t > t1) return { t: t, steps: i + 1, hit: false };
+  }
+  return { t: t, steps: max, hit: true };
+}
+
+// ---- WebGL setup -----------------------------------------------------------
+function fail(msg) {
+  $("nogl").style.display = "grid";
+  if (msg) $("noglMsg").textContent = msg;
+}
+var gl = null, isGL2 = false;
+var ctxOpts = { antialias: false, alpha: false, depth: false, stencil: false, preserveDrawingBuffer: true, powerPreference: "high-performance" };
+try { gl = cvs.getContext("webgl2", ctxOpts); isGL2 = !!gl; } catch (e) { gl = null; }
+if (!gl) { try { gl = cvs.getContext("webgl", ctxOpts) || cvs.getContext("experimental-webgl", ctxOpts); } catch (e) { gl = null; } }
+
+var VS = "attribute vec2 a; varying vec2 v; void main(){ v = a * 0.5 + 0.5; gl_Position = vec4(a, 0.0, 1.0); }";
+var FS_BLIT = "precision mediump float; varying vec2 v; uniform sampler2D t; uniform vec2 k; void main(){ gl_FragColor = texture2D(t, v * k); }";
+var FS = [
+"#ifdef GL_FRAGMENT_PRECISION_HIGH",
+"precision highp float;",
+"#else",
+"precision mediump float;",
+"#endif",
+"uniform vec2 uRes; uniform vec3 uPos, uF, uR, uU; uniform float uK, uPix, uParam, uRad, uFog;",
+"uniform int uType, uIter, uSteps, uShadow; uniform vec4 uC;",
+"uniform vec3 uPa, uPb, uPc, uPd;",
+"vec4 trap; float ot;",
+"float deBulb(vec3 p){",
+"  vec3 z = p; float dr = 1.0, r = 0.0; trap = vec4(abs(z), dot(z, z));",
+"  for (int i = 0; i < 16; i++) { if (i >= uIter) break;",
+"    r = length(z); if (r > 2.0) break; r = max(r, 1e-9);",
+"    float th = acos(clamp(z.z / r, -1.0, 1.0)) * uParam, ph = atan(z.y, z.x) * uParam;",
+"    dr = pow(r, uParam - 1.0) * uParam * dr + 1.0;",
+"    z = pow(r, uParam) * vec3(sin(th) * cos(ph), sin(th) * sin(ph), cos(th)) + p;",
+"    trap = min(trap, vec4(abs(z), dot(z, z))); }",
+"  r = length(z); ot = sqrt(trap.w) * 0.9 + trap.y * 0.35;",
+"  return 0.5 * log(r) * r / dr; }",
+"float deBox(vec3 p){",
+"  vec3 z = p; float dr = 1.0; trap = vec4(1e9);",
+"  for (int i = 0; i < 16; i++) { if (i >= uIter) break;",
+"    z = clamp(z, -1.0, 1.0) * 2.0 - z; float r2 = dot(z, z);",
+"    if (r2 < 0.25) { z *= 4.0; dr *= 4.0; } else if (r2 < 1.0) { z /= r2; dr /= r2; }",
+"    z = z * uParam + p; dr = dr * abs(uParam) + 1.0;",
+"    trap = min(trap, vec4(abs(z), dot(z, z))); }",
+"  ot = log(1.0 + trap.w) * 0.22 + trap.x * 0.05;",
+"  return length(z) / abs(dr); }",
+"float sdBox(vec3 p, vec3 b){ vec3 d = abs(p) - b; return min(max(d.x, max(d.y, d.z)), 0.0) + length(max(d, 0.0)); }",
+"float deMenger(vec3 p){",
+"  float d = sdBox(p, vec3(1.0)), s = 1.0; int lev = int(uParam + 0.5); ot = 0.1; float lv = 0.0;",
+"  for (int m = 0; m < 6; m++) { if (m >= lev) break;",
+"    vec3 a = mod(p * s, 2.0) - 1.0; s *= 3.0; vec3 r = abs(1.0 - 3.0 * abs(a));",
+"    float c = (min(max(r.x, r.y), min(max(r.y, r.z), max(r.z, r.x))) - 1.0) / s;",
+"    if (c > d) { d = c; lv = float(m + 1); ot = lv * 0.17 + length(a) * 0.12; } }",
+"  return d; }",
+"float deJulia(vec3 p){",
+"  vec4 z = vec4(p, 0.0); float md2 = 1.0, mz2 = dot(z, z); trap = vec4(abs(z.xyz), mz2);",
+"  for (int i = 0; i < 16; i++) { if (i >= uIter) break;",
+"    md2 *= 4.0 * mz2; z = vec4(z.x * z.x - dot(z.yzw, z.yzw), 2.0 * z.x * z.yzw) + uC;",
+"    mz2 = dot(z, z); trap = min(trap, vec4(abs(z.xyz), mz2)); if (mz2 > 4.0) break; }",
+"  ot = sqrt(trap.w) * 0.8 + trap.x * 0.3;",
+"  return 0.25 * sqrt(mz2 / md2) * log(mz2); }",
+"float de(vec3 p){",
+"  if (uType == 0) return deBulb(p.xzy);",
+"  if (uType == 1) return deBox(p);",
+"  if (uType == 2) return deMenger(p);",
+"  return deJulia(p); }",
+"vec3 pal(float t){ return uPa + uPb * cos(6.28318 * (uPc * t + uPd)); }",
+"vec3 sky(vec3 rd){ float h = rd.y * 0.5 + 0.5; return mix(vec3(0.004, 0.008, 0.010), vec3(0.030, 0.050, 0.058), h); }",
+"void main(){",
+"  vec2 uv = (gl_FragCoord.xy - 0.5 * uRes) / uRes.y * uK;",
+"  vec3 rd = normalize(uF + uR * uv.x + uU * uv.y), ro = uPos;",
+"  vec3 bg = sky(rd);",
+"  float b = dot(ro, rd), cc = dot(ro, ro) - uRad * uRad, disc = b * b - cc;",
+"  if (disc < 0.0) { gl_FragColor = vec4(pow(bg, vec3(0.4545)), 1.0); return; }",
+"  float sq = sqrt(disc), t1 = -b + sq, t = max(-b - sq, 0.0);",
+"  if (t1 < 0.0) { gl_FragColor = vec4(pow(bg, vec3(0.4545)), 1.0); return; }",
+"  float steps = 0.0, d = 1.0, eps = 0.0; bool hit = false;",
+"  for (int i = 0; i < 256; i++) { if (i >= uSteps) break;",
+"    d = de(ro + rd * t); eps = uPix * t + 1e-6;",
+"    if (d < eps) { hit = true; break; }",
+"    t += d * 0.85; steps += 1.0;",
+"    if (t > t1) break; }",
+"  if (!hit && t < t1) hit = true;",
+"  vec3 col = bg;",
+"  if (hit) {",
+"    vec3 p = ro + rd * t; de(p); float o = ot;",
+"    float e = max(eps * 0.5, 1e-6); vec2 k = vec2(1.0, -1.0);",
+"    vec3 n = normalize(k.xyy * de(p + k.xyy * e) + k.yyx * de(p + k.yyx * e) + k.yxy * de(p + k.yxy * e) + k.xxx * de(p + k.xxx * e));",
+"    vec3 alb = clamp(pal(o), 0.0, 1.0); alb *= alb;",
+"    float ao = 1.0 - steps / float(uSteps); ao = clamp(ao * ao * 1.25, 0.0, 1.0);",
+"    vec3 L = normalize(vec3(0.55, 0.75, -0.35));",
+"    float dif = max(dot(n, L), 0.0), sh = 1.0;",
+"    if (uShadow > 0 && dif > 0.0) {",
+"      float st = e * 6.0;",
+"      for (int j = 0; j < 64; j++) { if (j >= uShadow) break;",
+"        float h = de(p + n * e * 2.0 + L * st); sh = min(sh, 10.0 * h / st);",
+"        st += clamp(h, e, 0.3); if (sh < 0.02 || st > uRad * 2.0) break; }",
+"      sh = clamp(sh, 0.0, 1.0); sh = sh * sh * (3.0 - 2.0 * sh); }",
+"    vec3 hv = normalize(L - rd);",
+"    float spe = pow(max(dot(n, hv), 0.0), 40.0) * dif * sh;",
+"    float fre = pow(1.0 - max(dot(n, -rd), 0.0), 3.0);",
+"    vec3 lin = vec3(1.35, 1.2, 1.0) * dif * sh + vec3(0.10, 0.17, 0.20) * (0.6 + 0.4 * n.y) * ao + vec3(0.25, 0.2, 0.16) * fre * ao;",
+"    col = alb * lin * (0.35 + 0.65 * ao) + spe * 0.6;",
+"    float f = t / uFog; col = mix(col, bg, 1.0 - exp(-f * f));",
+"  }",
+"  col = col / (1.0 + col * 0.15);",
+"  gl_FragColor = vec4(pow(clamp(col, 0.0, 1.0), vec3(0.4545)), 1.0);",
+"}"
+].join("\n");
+
+function compile(type, src) {
+  var s = gl.createShader(type); gl.shaderSource(s, src); gl.compileShader(s);
+  if (!gl.getShaderParameter(s, gl.COMPILE_STATUS) && !gl.isContextLost()) throw new Error(gl.getShaderInfoLog(s) || "shader compile failed");
+  return s;
+}
+function program(fs) {
+  var p = gl.createProgram();
+  gl.attachShader(p, compile(gl.VERTEX_SHADER, VS)); gl.attachShader(p, compile(gl.FRAGMENT_SHADER, fs));
+  gl.bindAttribLocation(p, 0, "a"); gl.linkProgram(p);
+  if (!gl.getProgramParameter(p, gl.LINK_STATUS) && !gl.isContextLost()) throw new Error(gl.getProgramInfoLog(p) || "link failed");
+  var u = {}, n = gl.getProgramParameter(p, gl.ACTIVE_UNIFORMS);
+  for (var i = 0; i < n; i++) { var info = gl.getActiveUniform(p, i); u[info.name] = gl.getUniformLocation(p, info.name); }
+  return { p: p, u: u };
+}
+
+var P, B, tex, fbo, W = 1, H = 1;
+var ok = false;
+if (!gl) fail();
+else {
+  try {
+    P = program(FS); B = program(FS_BLIT);
+    var buf = gl.createBuffer(); gl.bindBuffer(gl.ARRAY_BUFFER, buf);
+    gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([-1, -1, 3, -1, -1, 3]), gl.STATIC_DRAW);
+    gl.enableVertexAttribArray(0); gl.vertexAttribPointer(0, 2, gl.FLOAT, false, 0, 0);
+    tex = gl.createTexture(); fbo = gl.createFramebuffer();
+    ok = true;
+  } catch (e) { fail("The fractal shader could not be compiled on this device: " + e.message); console.warn(e.message); }
+}
+cvs.addEventListener("webglcontextlost", function (e) { e.preventDefault(); fail("The graphics context was lost. Reload the page to restart the renderer."); ok = false; });
+
+function resize() {
+  var dpr = Math.min(window.devicePixelRatio || 1, phone ? 1.25 : 1.5);
+  var w = Math.max(1, Math.round(cvs.clientWidth * dpr)), h = Math.max(1, Math.round(cvs.clientHeight * dpr));
+  if (w === W && h === H && cvs.width === w) return;
+  W = cvs.width = w; H = cvs.height = h;
+  if (!ok) return;
+  gl.bindTexture(gl.TEXTURE_2D, tex);
+  gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, W, H, 0, gl.RGBA, gl.UNSIGNED_BYTE, null);
+  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
+  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
+  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
+  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+  gl.bindFramebuffer(gl.FRAMEBUFFER, fbo);
+  gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_2D, tex, 0);
+  gl.bindFramebuffer(gl.FRAMEBUFFER, null);
+  kick();
+}
+
+// ---- rendering ---------------------------------------------------------------
+var camDE = 1, lastScale = 0, ladder = 0, dirty = true, moving = false, lastFrame = 0, frameMs = 0;
+function render(scale) {
+  var q = QUAL[S.q], vw = Math.max(1, Math.round(W * scale)), vh = Math.max(1, Math.round(H * scale));
+  var b = basis(), pl = PAL[S.pal], u = P.u;
+  gl.bindFramebuffer(gl.FRAMEBUFFER, fbo);
+  gl.viewport(0, 0, vw, vh);
+  gl.useProgram(P.p);
+  gl.uniform2f(u.uRes, vw, vh);
+  gl.uniform3fv(u.uPos, cam.pos); gl.uniform3fv(u.uF, b.f); gl.uniform3fv(u.uR, b.r); gl.uniform3fv(u.uU, b.u);
+  gl.uniform1f(u.uK, FOVK); gl.uniform1f(u.uPix, FOVK / vh * 0.8); gl.uniform1f(u.uParam, S.param);
+  gl.uniform1f(u.uRad, radius()); gl.uniform1f(u.uFog, Math.max(Math.abs(camDE), 1e-6) * 7);
+  gl.uniform1i(u.uType, S.type); gl.uniform1i(u.uIter, q.it[S.type]); gl.uniform1i(u.uSteps, q.steps); gl.uniform1i(u.uShadow, q.shadow);
+  gl.uniform4fv(u.uC, juliaC);
+  gl.uniform3fv(u.uPa, pl[0]); gl.uniform3fv(u.uPb, pl[1]); gl.uniform3fv(u.uPc, pl[2]); gl.uniform3fv(u.uPd, pl[3]);
+  gl.drawArrays(gl.TRIANGLES, 0, 3);
+  gl.bindFramebuffer(gl.FRAMEBUFFER, null);
+  gl.viewport(0, 0, W, H);
+  gl.useProgram(B.p);
+  gl.bindTexture(gl.TEXTURE_2D, tex);
+  gl.uniform1i(B.u.t, 0); gl.uniform2f(B.u.k, (vw - 0.5) / W, (vh - 0.5) / H);
+  gl.drawArrays(gl.TRIANGLES, 0, 3);
+  lastScale = vw / W;
+}
+function kick() { dirty = true; }
+
+var hudAt = 0;
+function hud(now) {
+  if (moving && now - hudAt < 120) return;
+  hudAt = now;
+  var r = march(cam.pos, rayDir(cvs.clientWidth / 2, cvs.clientHeight / 2, cvs.clientWidth, cvs.clientHeight), FOVK / Math.max(1, H) * 0.8);
+  $("sPow").textContent = S.type === 2 ? String(Math.round(S.param)) : S.param.toFixed(2);
+  $("sDist").textContent = fmt(camDE);
+  $("sSteps").textContent = r.steps + (r.hit ? "" : " (miss)");
+  $("sMs").textContent = frameMs ? frameMs.toFixed(1) + " ms" : "idle";
+  $("sRes").textContent = Math.round(lastScale * W) + "×" + Math.round(lastScale * H);
+}
+function fmt(v) { var a = Math.abs(v); return a >= 0.01 ? v.toFixed(3) : v.toExponential(2); }
+
+// ---- interaction ---------------------------------------------------------------
+var ptrs = {}, nPtr = 0, pinch = 0, downAt = 0, downX = 0, downY = 0, lastTap = 0, travelled = 0;
+var fly = null, auto = null;
+function stopMotion() { fly = null; }
+function orbit(dx, dy) {
+  var pv = pivot();
+  cam.yaw -= dx; cam.pitch = Math.max(-1.5, Math.min(1.5, cam.pitch + dy));
+  placeAround(pv); kick(); moving = true;
+}
+function zoom(amount) { // amount > 0 dives in
+  var d = Math.max(Math.abs(camDE), 1e-7), f = fwdOf(cam.yaw, cam.pitch), s;
+  if (amount > 0) {
+    s = Math.min(amount, 1) * d * 0.6;
+    cam.dist = Math.max(cam.dist - s, d * 1.2);
+  } else {
+    s = -Math.max(d, cam.dist * 0.08) * Math.min(-amount, 1) * 0.6;
+    if (Math.hypot(cam.pos[0], cam.pos[1], cam.pos[2]) > radius() * 6) return;
+    cam.dist -= s;
+  }
+  cam.pos = [cam.pos[0] + f[0] * s, cam.pos[1] + f[1] * s, cam.pos[2] + f[2] * s];
+  camDE = DE(cam.pos); kick(); moving = true;
+}
+function flyTo(px, py) {
+  var w = cvs.clientWidth, h = cvs.clientHeight, rd = rayDir(px, py, w, h);
+  var r = march(cam.pos, rd, FOVK / Math.max(1, H));
+  if (!r.hit) return false;
+  var hit = [cam.pos[0] + rd[0] * r.t, cam.pos[1] + rd[1] * r.t, cam.pos[2] + rd[2] * r.t];
+  var end = 0.35 * r.t;
+  var to = [hit[0] - rd[0] * end, hit[1] - rd[1] * end, hit[2] - rd[2] * end];
+  var yaw1 = Math.atan2(rd[0], rd[2]), pitch1 = Math.asin(rd[1]);
+  var dy = yaw1 - cam.yaw; dy = Math.atan2(Math.sin(dy), Math.cos(dy));
+  fly = { t: 0, dur: reduced ? 0 : 1.1, from: cam.pos.slice(), to: to, y0: cam.yaw, dyaw: dy, p0: cam.pitch, p1: pitch1, d0: cam.dist, d1: end };
+  setAuto(false);
+  return true;
+}
+function stepFly(dt) {
+  fly.t = fly.dur ? Math.min(1, fly.t + dt / fly.dur) : 1;
+  var e = fly.t * fly.t * (3 - 2 * fly.t);
+  for (var i = 0; i < 3; i++) cam.pos[i] = fly.from[i] + (fly.to[i] - fly.from[i]) * e;
+  cam.yaw = fly.y0 + fly.dyaw * e; cam.pitch = fly.p0 + (fly.p1 - fly.p0) * e; cam.dist = fly.d0 + (fly.d1 - fly.d0) * e;
+  if (fly.t >= 1) fly = null;
+  moving = true; kick();
+}
+var nrm = [0, 0, 0];
+function stepAuto(dt, now) {
+  var d = DE(cam.pos), sc = Math.max(Math.abs(d), 1e-6);
+  grad(cam.pos, sc * 0.05, nrm);
+  var v = auto.v, dn = v[0] * nrm[0] + v[1] * nrm[1] + v[2] * nrm[2], i;
+  for (i = 0; i < 3; i++) v[i] -= nrm[i] * dn;
+  var tw = Math.sin(now * 0.00031) * 0.5 * dt; // slow meander around the normal
+  var cx = nrm[1] * v[2] - nrm[2] * v[1], cy = nrm[2] * v[0] - nrm[0] * v[2], cz = nrm[0] * v[1] - nrm[1] * v[0];
+  v[0] += cx * tw; v[1] += cy * tw; v[2] += cz * tw;
+  var l = Math.hypot(v[0], v[1], v[2]) || 1;
+  for (i = 0; i < 3; i++) v[i] /= l;
+  var k = Math.min(1, dt * 1.5);
+  for (i = 0; i < 3; i++) cam.pos[i] += v[i] * sc * 0.9 * dt + nrm[i] * (auto.h - d) * k;
+  var f = fwdOf(cam.yaw, cam.pitch), want = [v[0] - nrm[0] * 0.45, v[1] - nrm[1] * 0.45, v[2] - nrm[2] * 0.45];
+  l = Math.hypot(want[0], want[1], want[2]);
+  for (i = 0; i < 3; i++) f[i] += (want[i] / l - f[i]) * Math.min(1, dt * 2);
+  l = Math.hypot(f[0], f[1], f[2]);
+  lookFromYawPitch([f[0] / l, f[1] / l, f[2] / l]);
+  cam.dist = sc * 2;
+  moving = true; kick();
+}
+function setAuto(on) {
+  if (on) {
+    var d = Math.abs(DE(cam.pos)), f = fwdOf(cam.yaw, cam.pitch);
+    grad(cam.pos, Math.max(d, 1e-6) * 0.05, nrm);
+    var h = Math.min(d, radius() * 0.12);
+    var dn = f[0] * nrm[0] + f[1] * nrm[1] + f[2] * nrm[2];
+    var v = [f[0] - nrm[0] * dn, f[1] - nrm[1] * dn, f[2] - nrm[2] * dn];
+    if (Math.hypot(v[0], v[1], v[2]) < 1e-3) v = [nrm[1], nrm[2], nrm[0]];
+    auto = { v: v, h: h };
+    fly = null;
+  } else auto = null;
+  $("auto").setAttribute("aria-pressed", on ? "true" : "false");
+  kick();
+}
+
+cvs.addEventListener("pointerdown", function (e) {
+  cvs.setPointerCapture(e.pointerId);
+  ptrs[e.pointerId] = [e.clientX, e.clientY]; nPtr++;
+  if (nPtr === 1) { downAt = performance.now(); downX = e.clientX; downY = e.clientY; travelled = 0; }
+  if (nPtr === 2) { var k = Object.keys(ptrs); pinch = Math.hypot(ptrs[k[0]][0] - ptrs[k[1]][0], ptrs[k[0]][1] - ptrs[k[1]][1]); }
+  fly = null;
+  if (auto) setAuto(false);
+});
+cvs.addEventListener("pointermove", function (e) {
+  var p = ptrs[e.pointerId]; if (!p) return;
+  var dx = e.clientX - p[0], dy = e.clientY - p[1];
+  p[0] = e.clientX; p[1] = e.clientY; travelled += Math.abs(dx) + Math.abs(dy);
+  if (nPtr === 1) orbit(dx * 0.006, dy * 0.006);
+  else if (nPtr === 2) {
+    var k = Object.keys(ptrs), dist = Math.hypot(ptrs[k[0]][0] - ptrs[k[1]][0], ptrs[k[0]][1] - ptrs[k[1]][1]);
+    if (pinch > 0) zoom(Math.log(dist / pinch) * 3);
+    pinch = dist;
+  }
+});
+function up(e) {
+  if (!ptrs[e.pointerId]) return;
+  delete ptrs[e.pointerId]; nPtr = Math.max(0, nPtr - 1); pinch = 0;
+  if (nPtr === 0 && travelled < 8 && performance.now() - downAt < 300 && e.pointerType !== "mouse") {
+    var now = performance.now();
+    if (now - lastTap < 350) { var rc = cvs.getBoundingClientRect(); flyTo(e.clientX - rc.left, e.clientY - rc.top); lastTap = 0; }
+    else lastTap = now;
+  }
+}
+cvs.addEventListener("pointerup", up);
+cvs.addEventListener("pointercancel", up);
+cvs.addEventListener("dblclick", function (e) { var rc = cvs.getBoundingClientRect(); flyTo(e.clientX - rc.left, e.clientY - rc.top); });
+cvs.addEventListener("wheel", function (e) {
+  e.preventDefault(); fly = null;
+  var dy = e.deltaMode === 1 ? e.deltaY * 33 : e.deltaY;
+  zoom(-dy * 0.004);
+}, { passive: false });
+document.addEventListener("keydown", function (e) {
+  var tg = e.target.tagName;
+  if (tg === "INPUT" || tg === "SELECT" || (tg === "BUTTON" && (e.key === "Enter" || e.key === " ")) || e.ctrlKey || e.metaKey || e.altKey) return;
+  var k = e.key, used = true;
+  if (k === "ArrowLeft") orbit(-0.08, 0);
+  else if (k === "ArrowRight") orbit(0.08, 0);
+  else if (k === "ArrowUp") orbit(0, -0.08);
+  else if (k === "ArrowDown") orbit(0, 0.08);
+  else if (k === "+" || k === "=") zoom(0.8);
+  else if (k === "-" || k === "_") zoom(-0.8);
+  else if (k === "Enter") flyTo(cvs.clientWidth / 2, cvs.clientHeight / 2);
+  else if (k === "a" || k === "A") setAuto(!auto);
+  else if (k === "r" || k === "R") reset();
+  else used = false;
+  if (used) e.preventDefault();
+});
+
+// ---- controls ------------------------------------------------------------------
+function syncParamUI() {
+  var f = FR[S.type], el = $("param");
+  el.min = f.min; el.max = f.max; el.step = f.step; el.value = S.param;
+  $("paramLabel").textContent = f.label;
+  $("pname").textContent = f.label.split(" ")[0].toLowerCase();
+  $("formula").innerHTML = "<b>" + f.name + "</b>" + f.formula;
+  $("note").innerHTML = f.note;
+  showParam();
+}
+function showParam() {
+  var txt = S.type === 2 ? String(Math.round(S.param)) : S.param.toFixed(2);
+  if (S.type === 3) txt += "  c = (" + juliaC.map(function (x) { return x.toFixed(2); }).join(", ") + ")";
+  $("paramOut").textContent = txt;
+}
+$("fractal").addEventListener("change", function () {
+  S.type = +this.value; S.param = FR[S.type].def; setJuliaC(); setAuto(false); fly = null;
+  syncParamUI(); home(); camDE = DE(cam.pos); kick();
+});
+$("param").addEventListener("input", function () {
+  S.param = +this.value; setJuliaC(); showParam(); camDE = DE(cam.pos); moving = true; kick();
+});
+$("palette").addEventListener("change", function () { S.pal = +this.value; kick(); });
+$("quality").addEventListener("change", function () { S.q = +this.value; camDE = DE(cam.pos); kick(); });
+$("auto").addEventListener("click", function () { setAuto(!auto); });
+$("save").addEventListener("click", function () {
+  var msg = "View saved on this device.";
+  try { localStorage.setItem("bulbdive.view", JSON.stringify({ s: S, c: cam })); } catch (e) { msg = "Saving is blocked in this browser."; }
+  $("saved").textContent = msg;
+});
+function reset() {
+  S.param = FR[S.type].def; setJuliaC(); setAuto(false); fly = null;
+  syncParamUI(); home(); camDE = DE(cam.pos); kick();
+  $("saved").textContent = "";
+}
+$("reset").addEventListener("click", reset);
+
+function load() {
+  try {
+    var v = JSON.parse(localStorage.getItem("bulbdive.view") || "null");
+    if (!v || !v.s || !v.c || !FR[v.s.type] || !PAL[v.s.pal] || !QUAL[v.s.q]) return false;
+    var c = v.c, nums = [c.yaw, c.pitch, c.dist, v.s.param].concat(c.pos);
+    if (c.pos.length !== 3 || !nums.every(isFinite)) return false;
+    S.type = v.s.type; S.pal = v.s.pal; S.q = v.s.q;
+    S.param = Math.max(FR[S.type].min, Math.min(FR[S.type].max, +v.s.param));
+    cam.pos = c.pos.map(Number); cam.yaw = +c.yaw; cam.pitch = +c.pitch; cam.dist = +c.dist;
+    return true;
+  } catch (e) { return false; }
+}
+
+// ---- main loop -----------------------------------------------------------------
+var prev = 0;
+function frame(now) {
+  requestAnimationFrame(frame);
+  var dt = prev ? Math.min(0.05, (now - prev) / 1000) : 0.016; prev = now;
+  if (!ok) return;
+  resize();
+  if (fly) stepFly(dt);
+  else if (auto) stepAuto(dt, now);
+  if (moving) camDE = DE(cam.pos);
+  var q = QUAL[S.q];
+  if (moving) { ladder = 0; dirty = true; }
+  if (dirty) {
+    var scale = moving ? q.move : [q.move, (q.move + q.full) / 2, q.full][Math.min(ladder, 2)];
+    render(scale);
+    frameMs = lastFrame ? now - lastFrame : 0; lastFrame = now;
+    if (!moving) { ladder++; if (ladder > 2) { dirty = false; lastFrame = 0; } }
+    hud(now);
+  }
+  moving = false;
+}
+
+var restored = load();
+$("fractal").value = S.type; $("palette").value = S.pal; $("quality").value = S.q;
+setJuliaC(); syncParamUI();
+if (!restored) home();
+camDE = DE(cam.pos);
+if (ok) {
+  resize();
+  render(QUAL[S.q].move); hud(0); ladder = 1; // paint a cheap first frame before the loop starts
+  window.addEventListener("resize", kick);
+  requestAnimationFrame(frame);
+}
+window.__bulb = { S: S, cam: cam, DE: DE, zoom: zoom, flyTo: flyTo, setAuto: setAuto, gl2: isGL2 };
+})();
+</script>
+</body>
+</html>
