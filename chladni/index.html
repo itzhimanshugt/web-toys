@@ -1,0 +1,646 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>Chladni Sand Plate</title>
+<meta name="description" content="A vibrating metal plate covered in sand: pick a standing-wave mode, sweep the frequency or bow the edge, and watch thousands of grains gather on the nodal lines.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bodoni+Moda:ital,opsz,wght@0,6..96,500;0,6..96,700;1,6..96,500&family=Archivo:wght@400;500;600&display=swap">
+<style>
+/* Layout: square plate as hero on the left, a narrow instrument panel on the right; stacked on phones. One visual world: a dark acoustics bench. */
+:root {
+  --soot: #0d1014;
+  --steel: #171c22;
+  --rule: #2a313a;
+  --chalk: #e7ddc5;
+  --fog: #8e97a2;
+  --brass: #c9a254;
+  --brass-dim: #7d6634;
+  --display: "Bodoni Moda", "Didot", "Bodoni 72", Georgia, serif;
+  --ui: "Archivo", "Helvetica Neue", "Segoe UI", sans-serif;
+  --mono: var(--ui);
+  color-scheme: dark;
+}
+* { box-sizing: border-box; }
+html { -webkit-text-size-adjust: 100%; }
+body {
+  margin: 0;
+  background: var(--soot);
+  color: var(--chalk);
+  font: 15px/1.5 var(--ui);
+  padding-top: env(safe-area-inset-top, 0px);
+  padding-bottom: env(safe-area-inset-bottom, 0px);
+}
+.wrap {
+  max-width: 1240px;
+  margin: 0 auto;
+  padding-left: max(16px, env(safe-area-inset-left, 0px));
+  padding-right: max(16px, env(safe-area-inset-right, 0px));
+  padding-block: 20px 28px;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 340px;
+  gap: 28px;
+  align-items: start;
+}
+.bench { min-width: 0; display: grid; gap: 10px; justify-items: center; }
+.plate-box { width: 100%; max-width: min(100%, calc(100vh - 80px)); min-width: 280px; }
+canvas#plate {
+  display: block;
+  width: 100%;
+  aspect-ratio: 1;
+  border-radius: 6px;
+  touch-action: none;
+  cursor: crosshair;
+  background: #0a0c0f;
+}
+canvas#plate:focus-visible { outline: 2px solid var(--brass); outline-offset: 4px; }
+.caption {
+  width: 100%;
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+  color: var(--fog);
+  font-size: 13px;
+}
+.caption > * { min-width: 0; }
+#formula { font-family: var(--mono); font-size: 12.5px; color: var(--chalk); overflow-wrap: anywhere; }
+.panel { min-width: 0; display: grid; gap: 18px; }
+h1 {
+  font-family: var(--display);
+  font-weight: 500;
+  font-size: clamp(24px, 4vw, 32px);
+  line-height: 1.02;
+  letter-spacing: -0.01em;
+  margin: 0;
+  text-wrap: balance;
+}
+.lede { margin: 6px 0 0; color: var(--fog); text-wrap: pretty; }
+.readout {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  border-top: 1px solid var(--rule);
+  border-bottom: 1px solid var(--rule);
+  padding-block: 10px;
+}
+.readout div { min-width: 0; }
+.readout .k {
+  font-size: 12px; color: var(--fog);
+}
+.readout .v {
+  font-family: var(--mono); font-size: 26px; font-variant-numeric: tabular-nums; line-height: 1.2;
+}
+.readout .v small { font-size: 13px; color: var(--fog); margin-left: 3px; }
+fieldset { border: 0; margin: 0; padding: 0; display: grid; gap: 10px; min-width: 0; }
+legend {
+  padding: 0; margin-bottom: 8px;
+  font-size: 12px; color: var(--brass);
+}
+.row { display: grid; grid-template-columns: 116px minmax(0, 1fr) 34px; align-items: center; gap: 10px; }
+.row label { font-size: 13.5px; min-width: 0; }
+.row output { font-family: var(--mono); font-size: 13px; text-align: right; font-variant-numeric: tabular-nums; }
+input[type="range"] { width: 100%; min-width: 0; accent-color: var(--brass); margin: 0; height: 22px; }
+select {
+  width: 100%; min-width: 0;
+  font: inherit; font-size: 13.5px;
+  color: var(--chalk); background: var(--steel);
+  border: 1px solid var(--rule); border-radius: 3px; padding: 5px 8px;
+}
+.btns { display: flex; flex-wrap: wrap; gap: 8px; }
+button {
+  font: 500 13.5px/1 var(--ui);
+  color: var(--chalk);
+  background: var(--steel);
+  border: 1px solid var(--rule);
+  border-radius: 3px;
+  padding: 9px 13px;
+  cursor: pointer;
+  touch-action: manipulation;
+}
+button:hover { border-color: var(--brass-dim); }
+button[aria-pressed="true"] { background: var(--brass); color: #16120a; border-color: var(--brass); }
+button#bow { user-select: none; -webkit-user-select: none; }
+button#bow.active { border-color: var(--brass); color: var(--brass); }
+:focus-visible { outline: 2px solid var(--brass); outline-offset: 2px; }
+.keys { font-size: 12px; color: var(--fog); margin: 0; }
+kbd {
+  font-family: var(--mono); font-size: 11px;
+  border: 1px solid var(--rule); border-bottom-width: 2px; border-radius: 3px;
+  padding: 0 4px; color: var(--chalk);
+}
+.note { border-top: 1px solid var(--rule); padding-top: 14px; font-size: 13.5px; color: #c4bba6; }
+.note h2 {
+  font-family: var(--display); font-style: italic; font-weight: 500; font-size: 19px;
+  margin: 0 0 6px; color: var(--chalk); text-wrap: balance;
+}
+.note p { margin: 0 0 8px; text-wrap: pretty; }
+.note cite { font-style: italic; color: var(--chalk); }
+@media (max-width: 860px) {
+  .wrap { grid-template-columns: minmax(0, 1fr); gap: 20px; padding-block: 14px 24px; }
+  .plate-box { max-width: 100%; min-width: 0; }
+  .panel { order: -1; gap: 14px; }
+  .panel .controls { order: 2; }
+}
+@media (max-width: 860px) {
+  .panel { display: contents; }
+  .head { order: -2; }
+  .bench { order: -1; }
+  .readout, .controls, .keys, .note { order: 0; }
+}
+.controls { display: grid; gap: 18px; min-width: 0; }
+body { font-variant-numeric: tabular-nums; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <section class="bench" aria-label="Vibrating plate">
+    <div class="plate-box">
+      <canvas id="plate" tabindex="0" aria-label="Chladni plate with sand. Drag along the edge to bow it, or hold B."></canvas>
+    </div>
+    <div class="caption">
+      <span id="formula"></span>
+      <span id="hint">Drag along the rim to bow the plate</span>
+    </div>
+  </section>
+
+  <aside class="panel">
+    <header class="head">
+      <h1>Chladni Sand Plate</h1>
+      <p class="lede">The plate rings in one standing wave. Grains are thrown about where it moves and come to rest on the nodal lines, where it stays still.</p>
+    </header>
+
+    <div class="readout" aria-live="polite">
+      <div><div class="k">Drive frequency</div><div class="v"><span id="freq">0</span><small>Hz</small></div></div>
+      <div><div class="k" id="modeKey">Mode (n, m)</div><div class="v" id="modeOut">3, 5</div></div>
+    </div>
+
+    <div class="controls">
+      <fieldset>
+        <legend>Mode</legend>
+        <div class="row"><label for="n" id="nLab">n</label><input id="n" type="range" min="1" max="7" step="1" value="3"><output id="nOut" for="n">3</output></div>
+        <div class="row"><label for="m" id="mLab">m</label><input id="m" type="range" min="1" max="7" step="1" value="5"><output id="mOut" for="m">5</output></div>
+        <div class="row"><label for="sign">Combination</label><select id="sign"><option value="-1">difference ( − )</option><option value="1">sum ( + )</option></select><span></span></div>
+      </fieldset>
+
+      <fieldset>
+        <legend>Drive</legend>
+        <div class="row"><label for="amp">Amplitude</label><input id="amp" type="range" min="0" max="100" step="1" value="60"><output id="ampOut" for="amp">60</output></div>
+        <div class="btns">
+          <button id="sound" type="button" aria-pressed="false">Sound on</button>
+          <button id="sweep" type="button" aria-pressed="false">Sweep modes</button>
+          <button id="bow" type="button">Hold to bow</button>
+        </div>
+      </fieldset>
+
+      <fieldset>
+        <legend>Plate</legend>
+        <div class="row"><label for="shape">Shape</label><select id="shape"><option value="square">Square, 2 × 2 units</option><option value="circle">Circular disc</option></select><span></span></div>
+        <div class="row"><label for="sand">Sand grains</label><input id="sand" type="range" min="2000" max="40000" step="1000" value="30000"><output id="sandOut" for="sand">30k</output></div>
+        <div class="btns"><button id="scatter" type="button">Sprinkle fresh sand</button></div>
+      </fieldset>
+    </div>
+
+    <p class="keys"><kbd>↑</kbd><kbd>↓</kbd> n &nbsp; <kbd>←</kbd><kbd>→</kbd> m &nbsp; <kbd>B</kbd> bow &nbsp; <kbd>S</kbd> sweep &nbsp; <kbd>C</kbd> shape &nbsp; <kbd>X</kbd> sign &nbsp; <kbd>R</kbd> sprinkle</p>
+
+    <section class="note">
+      <h2>Ernst Chladni, 1787</h2>
+      <p>Ernst Florens Friedrich Chladni (1756–1827), a German physicist and musician, fixed thin brass and glass plates at one point, scattered sand over them and drew a violin bow along the edge. The sand gathered into figures along the lines that did not move. He published them in <cite>Entdeckungen über die Theorie des Klanges</cite> (Leipzig, 1787).</p>
+      <p>The square plate here uses the classic approximation u = cos(nπx) cos(mπy) ± cos(mπx) cos(nπy) with a nominal pitch of 22 Hz × (n² + m²). The disc uses Bessel modes J<sub>m</sub>(kr) cos mθ with k at a zero of J<sub>m</sub>′ (free rim), pitched by Chladni’s law f ∝ (m + 2n)², with m nodal diameters and n nodal circles. Both are idealised models; real plates shift with thickness, material and clamping.</p>
+    </section>
+  </aside>
+</div>
+
+<script>
+(() => {
+  "use strict";
+  const $ = (id) => document.getElementById(id);
+  const canvas = $("plate");
+  const ctx = canvas.getContext("2d", { alpha: false });
+  const phone = matchMedia("(max-width: 600px)").matches;
+  const reduce = matchMedia("(prefers-reduced-motion: reduce)").matches;
+
+  // ---------- state ----------
+  const MAXG = phone ? 12000 : 40000;
+  const sandIn = $("sand");
+  sandIn.max = MAXG;
+  sandIn.value = phone ? 8000 : 30000;
+  let count = +sandIn.value;
+  const gx = new Float32Array(MAXG), gy = new Float32Array(MAXG);
+  const gc = new Uint8Array(MAXG);
+
+  let shape = "square", n = 3, m = 5, sign = -1;
+  let amp = 0.6, bowE = 0, bowHeld = false, keyBow = false;
+  let sweeping = false;
+
+  // ---------- fast rng ----------
+  let seed = 0x9e3779b9;
+  function rnd() { seed ^= seed << 13; seed ^= seed >>> 17; seed ^= seed << 5; return (seed >>> 0) / 4294967296; }
+
+  // ---------- Bessel ----------
+  function besselJ(order, x) {
+    // J_m(x) = (1/pi) * integral_0^pi cos(m t - x sin t) dt, Simpson rule
+    const N = 96, h = Math.PI / N;
+    let s = Math.cos(-0) + Math.cos(order * Math.PI);
+    for (let i = 1; i < N; i++) { const t = i * h; s += (i & 1 ? 4 : 2) * Math.cos(order * t - x * Math.sin(t)); }
+    return s * h / 3 / Math.PI;
+  }
+  function dJ(order, x) { return order === 0 ? -besselJ(1, x) : 0.5 * (besselJ(order - 1, x) - besselJ(order + 1, x)); }
+  const zeroCache = {};
+  function dJZeros(order) { // positive zeros of J_m', excluding x = 0
+    if (zeroCache[order]) return zeroCache[order];
+    const z = []; let x0 = 0.05, f0 = dJ(order, x0);
+    for (let x = 0.1; z.length < 5 && x < 40; x += 0.05) {
+      const f = dJ(order, x);
+      if (f0 * f < 0) {
+        let a = x - 0.05, b = x, fa = f0;
+        for (let k = 0; k < 40; k++) { const c = (a + b) / 2, fc = dJ(order, c); if (fa * fc <= 0) b = c; else { a = c; fa = fc; } }
+        z.push((a + b) / 2);
+      }
+      f0 = f;
+    }
+    return (zeroCache[order] = z);
+  }
+  // nodal circles n: for m >= 1 the (n+1)th zero of J_m'; for m = 0 the nth nonzero zero
+  function circleK(mm, nn) { const z = dJZeros(mm); return mm === 0 ? z[nn - 1] : z[nn]; }
+
+  // ---------- mode fields ----------
+  const G = 257;
+  let fieldA = new Float32Array(G * G), fieldB = new Float32Array(G * G);
+  const radial = new Float32Array(1025);
+  function buildField(out, sh, nn, mm, sg) {
+    let max = 0;
+    if (sh === "square") {
+      const P = Math.PI;
+      for (let j = 0; j < G; j++) {
+        const y = j / (G - 1);
+        const cny = Math.cos(nn * P * y), cmy = Math.cos(mm * P * y);
+        for (let i = 0; i < G; i++) {
+          const x = i / (G - 1);
+          const u = Math.cos(nn * P * x) * cmy + sg * Math.cos(mm * P * x) * cny;
+          out[j * G + i] = u; const a = Math.abs(u); if (a > max) max = a;
+        }
+      }
+    } else {
+      const k = circleK(mm, nn);
+      for (let i = 0; i <= 1024; i++) radial[i] = besselJ(mm, k * i / 1024);
+      for (let j = 0; j < G; j++) {
+        const Y = 2 * j / (G - 1) - 1;
+        for (let i = 0; i < G; i++) {
+          const X = 2 * i / (G - 1) - 1;
+          let r = Math.sqrt(X * X + Y * Y); if (r > 1) r = 1;
+          const fr = r * 1024, ri = Math.min(1023, fr | 0), t = fr - ri;
+          const u = (radial[ri] * (1 - t) + radial[ri + 1] * t) * Math.cos(mm * Math.atan2(Y, X));
+          out[j * G + i] = u; const a = Math.abs(u); if (a > max) max = a;
+        }
+      }
+    }
+    if (max > 0) for (let i = 0; i < out.length; i++) out[i] /= max;
+  }
+  function freqOf(sh, nn, mm) { return sh === "square" ? 22 * (nn * nn + mm * mm) : 36 * (mm + 2 * nn) * (mm + 2 * nn); }
+
+  // ---------- grains ----------
+  function placeGrain(i) {
+    if (shape === "square") { gx[i] = rnd(); gy[i] = rnd(); }
+    else { const a = rnd() * 2 * Math.PI, r = Math.sqrt(rnd()) * 0.99; gx[i] = 0.5 + 0.5 * r * Math.cos(a); gy[i] = 0.5 + 0.5 * r * Math.sin(a); }
+    gc[i] = (rnd() * 4) | 0;
+  }
+  for (let i = 0; i < MAXG; i++) placeGrain(i);
+
+  let wA = 1, wB = 0; // signed mode blend used during sweeps
+  function step(s, eta, jit) {
+    const g1 = G - 1, A = fieldA, B = fieldB, useB = wB !== 0, sq = shape === "square";
+    for (let i = 0; i < count; i++) {
+      let x = gx[i], y = gy[i];
+      const fx0 = x * g1, fy0 = y * g1;
+      let ix = fx0 | 0, iy = fy0 | 0; if (ix > g1 - 1) ix = g1 - 1; if (iy > g1 - 1) iy = g1 - 1;
+      const fx = fx0 - ix, fy = fy0 - iy, o = iy * G + ix;
+      let u00 = A[o] * wA, u10 = A[o + 1] * wA, u01 = A[o + G] * wA, u11 = A[o + G + 1] * wA;
+      if (useB) { u00 += B[o] * wB; u10 += B[o + 1] * wB; u01 += B[o + G] * wB; u11 += B[o + G + 1] * wB; }
+      const u = (u00 * (1 - fx) + u10 * fx) * (1 - fy) + (u01 * (1 - fx) + u11 * fx) * fy;
+      const ux = ((u10 - u00) * (1 - fy) + (u11 - u01) * fy) * g1;
+      const uy = ((u01 - u00) * (1 - fx) + (u11 - u10) * fx) * g1;
+      const au = u < 0 ? -u : u;
+      let px = eta * u * ux, py = eta * u * uy;
+      if (px > 0.01) px = 0.01; else if (px < -0.01) px = -0.01;
+      if (py > 0.01) py = 0.01; else if (py < -0.01) py = -0.01;
+      x += (rnd() - 0.5) * (s * au + jit) - px;
+      y += (rnd() - 0.5) * (s * au + jit) - py;
+      if (sq) {
+        if (x < 0) x = -x; else if (x > 1) x = 2 - x;
+        if (y < 0) y = -y; else if (y > 1) y = 2 - y;
+        if (x < 0 || x > 1) x = 0.5; if (y < 0 || y > 1) y = 0.5;
+      } else {
+        const X = 2 * x - 1, Y = 2 * y - 1, r2 = X * X + Y * Y;
+        if (r2 > 0.9801) { const k = 0.985 / Math.sqrt(r2); x = 0.5 + 0.5 * X * k; y = 0.5 + 0.5 * Y * k; }
+      }
+      gx[i] = x; gy[i] = y;
+    }
+  }
+  function presim(steps) {
+    for (let k = 0; k < steps; k++) { const t = k / steps; step(0.07 * (1 - t) + 0.006 * t, 0.0004, 0.004 * (1 - t) + 0.0008 * t); }
+  }
+
+  // ---------- rendering ----------
+  let W = 0, M = 0, P = 0, img = null, buf32 = null, bg32 = null, gs = 1, so = 1;
+  const SAND = [0xffc6dbe9, 0xffb5cde0, 0xffd7e8f1, 0xffa3bccf]; // ABGR: pale quartz sand shades
+  function resize() {
+    const rect = canvas.getBoundingClientRect();
+    const dpr = Math.min(window.devicePixelRatio || 1, 2);
+    const w = Math.max(240, Math.min(phone ? 760 : 1100, Math.round(rect.width * dpr)));
+    if (w === W && bg32) return;
+    W = w; canvas.width = W; canvas.height = W;
+    M = Math.round(W * 0.035); P = W - 2 * M;
+    gs = Math.max(1, Math.round(W / 480)); so = Math.max(1, Math.round(gs * 0.75));
+    img = ctx.createImageData(W, W); buf32 = new Uint32Array(img.data.buffer);
+    buildBackground();
+  }
+  function buildBackground() {
+    const data = new Uint8ClampedArray(W * W * 4);
+    const fiber = new Float32Array(W), tmp = new Float32Array(W);
+    const circ = shape === "circle";
+    const cx = W / 2, R = P / 2;
+    let rowDrift = 0;
+    for (let y = 0; y < W; y++) {
+      // brushed grain: each row is noise smeared along x, with a slow row-to-row drift
+      for (let x = 0; x < W; x++) tmp[x] = rnd() - 0.5;
+      const win = Math.max(8, W >> 5); let acc = 0;
+      for (let x = 0; x < win; x++) acc += tmp[x];
+      for (let x = 0; x < W; x++) { fiber[x] = acc / win; acc += tmp[(x + win) % W] - tmp[x]; }
+      rowDrift = rowDrift * 0.9 + (rnd() - 0.5) * 0.35;
+      for (let x = 0; x < W; x++) {
+        const i = (y * W + x) * 4;
+        let inside, edge;
+        if (circ) { const d = Math.hypot(x - cx, y - cx); inside = d <= R; edge = R - d; }
+        else { inside = x >= M && x < W - M && y >= M && y < W - M; edge = Math.min(x - M, W - M - x, y - M, W - M - y); }
+        if (!inside) {
+          // dark felt bench with a soft drop shadow under the plate
+          const sd = circ ? Math.hypot(x - cx - M * 0.3, y - cx - M * 0.45) - R : Math.max(M - x, x - (W - M), M - y, y - (W - M)) - 0;
+          const sh = Math.max(0, 1 - Math.max(0, sd) / (M * 1.4));
+          const base = 15 - 7 * sh + (rnd() - 0.5) * 3;
+          data[i] = base * 0.85; data[i + 1] = base * 0.95; data[i + 2] = base * 1.15; data[i + 3] = 255;
+          continue;
+        }
+        const u = x / W, v = y / W;
+        const sheen = 0.16 * Math.exp(-Math.pow((u - v * 0.6) - 0.15, 2) * 9) + 0.07 * Math.exp(-Math.pow(u + v - 1.35, 2) * 14);
+        let L = 0.20 + sheen + fiber[x] * 0.22 + rowDrift * 0.08 + (rnd() - 0.5) * 0.025;
+        if (edge < 3) L += edge < 1.2 ? 0.22 : -0.06; // bevel: bright lip, dark chamfer
+        L = Math.max(0, L) * 255;
+        data[i] = L * 0.90; data[i + 1] = L * 0.96; data[i + 2] = L * 1.06; data[i + 3] = 255;
+      }
+    }
+    bg32 = new Uint32Array(data.buffer);
+  }
+  function draw() {
+    buf32.set(bg32);
+    const lim = W - gs - so - 1;
+    for (let i = 0; i < count; i++) { // shadows first so grains sit on top
+      let px = (M + gx[i] * P) | 0, py = (M + gy[i] * P) | 0;
+      px += so; py += so; if (px < 0 || py < 0 || px > lim || py > lim) continue;
+      for (let b = 0; b < gs; b++) { const r = (py + b) * W + px; for (let a = 0; a < gs; a++) { const p = buf32[r + a]; buf32[r + a] = ((p >>> 1) & 0x7f7f7f) | 0xff000000; } }
+    }
+    for (let i = 0; i < count; i++) {
+      const px = (M + gx[i] * P) | 0, py = (M + gy[i] * P) | 0;
+      if (px < 0 || py < 0 || px > lim || py > lim) continue;
+      const c = SAND[gc[i]];
+      for (let b = 0; b < gs; b++) { const r = (py + b) * W + px; for (let a = 0; a < gs; a++) buf32[r + a] = c; }
+    }
+    ctx.putImageData(img, 0, 0);
+    if (bowE > 0.03 && bowPos.ok) {
+      ctx.save();
+      ctx.globalAlpha = Math.min(1, bowE);
+      ctx.strokeStyle = "#c9a254"; ctx.lineWidth = Math.max(2, W / 260); ctx.lineCap = "round";
+      ctx.beginPath(); ctx.moveTo(bowPos.x - bowPos.tx * W * 0.07, bowPos.y - bowPos.ty * W * 0.07);
+      ctx.lineTo(bowPos.x + bowPos.tx * W * 0.07, bowPos.y + bowPos.ty * W * 0.07); ctx.stroke();
+      ctx.restore();
+    }
+  }
+
+  // ---------- sweep ----------
+  function modeList() {
+    const L = [];
+    if (shape === "square") { for (let a = 1; a <= 7; a++) for (let b = a + 1; b <= 7; b++) L.push([a, b]); }
+    else { for (let mm = 0; mm <= 6; mm++) for (let nn = 0; nn <= 3; nn++) if (mm + 2 * nn >= 2 && !(mm === 0 && nn === 0)) L.push([nn, mm]); }
+    L.sort((p, q) => freqOf(shape, p[0], p[1]) - freqOf(shape, q[0], q[1]));
+    return L;
+  }
+  let sw = null; // {from:[n,m], to:[n,m], t, phase}
+  const DWELL = 2.6, TRANS = 2.0;
+  function nextTarget() {
+    const L = modeList();
+    let idx = L.findIndex((p) => p[0] === n && p[1] === m);
+    if (idx < 0) { const f = freqOf(shape, n, m); idx = L.findIndex((p) => freqOf(shape, p[0], p[1]) > f) - 1; }
+    return L[(idx + 1 + L.length) % L.length];
+  }
+  function startTransition() {
+    const t = nextTarget();
+    buildField(fieldB, shape, t[0], t[1], sign);
+    sw = { to: t, t: 0, phase: "trans", f0: freqOf(shape, n, m), f1: freqOf(shape, t[0], t[1]) };
+  }
+
+  // ---------- UI ----------
+  const nIn = $("n"), mIn = $("m"), signIn = $("sign"), shapeIn = $("shape"), ampIn = $("amp");
+  let freq = freqOf(shape, n, m);
+  function syncUI() {
+    nIn.value = n; mIn.value = m;
+    $("nOut").textContent = n; $("mOut").textContent = m;
+    $("modeOut").textContent = n + ", " + m;
+    if (shape === "square") {
+      const s = sign < 0 ? "−" : "+";
+      $("formula").textContent = `u = cos(${n}πx)cos(${m}πy) ${s} cos(${m}πx)cos(${n}πy)`;
+    } else {
+      const k = circleK(m, n);
+      $("formula").textContent = `u = J${sub(m)}(${k.toFixed(3)} r)·cos ${m}θ`;
+    }
+  }
+  function sub(d) { return String(d).replace(/\d/g, (c) => "₀₁₂₃₄₅₆₇₈₉"[c]); }
+  function fixMode() {
+    if (shape === "square") { if (n === m && sign < 0) { sign = 1; signIn.value = "1"; } }
+    else if (m + 2 * n < 2) { n = 1; }
+  }
+  function setMode(nn, mm, keepSweep) {
+    n = nn; m = mm; fixMode();
+    if (!keepSweep && sw) { sw = null; }
+    wA = 1; wB = 0;
+    buildField(fieldA, shape, n, m, sign);
+    freq = freqOf(shape, n, m);
+    syncUI();
+  }
+  function configShape() {
+    if (shape === "square") {
+      $("nLab").textContent = "n"; $("mLab").textContent = "m"; $("modeKey").textContent = "Mode (n, m)";
+      nIn.min = 1; nIn.max = 7; mIn.min = 1; mIn.max = 7; signIn.disabled = false;
+    } else {
+      $("nLab").textContent = "Nodal circles n"; $("mLab").textContent = "Diameters m"; $("modeKey").textContent = "Mode (n, m)";
+      nIn.min = 0; nIn.max = 3; mIn.min = 0; mIn.max = 6; signIn.disabled = true;
+    }
+  }
+  nIn.addEventListener("input", () => setMode(+nIn.value, m));
+  mIn.addEventListener("input", () => setMode(n, +mIn.value));
+  signIn.addEventListener("change", () => { sign = +signIn.value; if (shape === "square" && n === m && sign < 0) { m = n < 7 ? n + 1 : n - 1; } setMode(n, m); });
+  function setShape(s) {
+    shape = s; shapeIn.value = s; configShape();
+    const nn = s === "square" ? 3 : 2, mm = s === "square" ? 5 : 3;
+    if (s === "square") { sign = -1; signIn.value = "-1"; }
+    for (let i = 0; i < MAXG; i++) placeGrain(i);
+    setMode(nn, mm);
+    W = 0; resize();
+  }
+  shapeIn.addEventListener("change", () => setShape(shapeIn.value));
+  ampIn.addEventListener("input", () => { amp = ampIn.value / 100; $("ampOut").textContent = ampIn.value; });
+  sandIn.addEventListener("input", () => {
+    const c = +sandIn.value;
+    for (let i = count; i < c; i++) placeGrain(i);
+    count = c; $("sandOut").textContent = Math.round(c / 1000) + "k";
+  });
+  $("scatter").addEventListener("click", () => { for (let i = 0; i < MAXG; i++) placeGrain(i); });
+  const sweepBtn = $("sweep");
+  function setSweep(on) {
+    sweeping = on; sweepBtn.setAttribute("aria-pressed", on ? "true" : "false");
+    if (on) { if (!sw) startTransition(); }
+    else if (sw) { // settle on whichever mode dominates right now
+      const t = sw.to; const done = sw.phase === "trans" && sw.t > TRANS / 2;
+      sw = null; if (done) setMode(t[0], t[1]); else { wA = 1; wB = 0; freq = freqOf(shape, n, m); }
+    }
+  }
+  sweepBtn.addEventListener("click", () => setSweep(!sweeping));
+
+  // bow button: hold with mouse/touch, or each keyboard press gives one stroke
+  const bowBtn = $("bow");
+  bowBtn.addEventListener("pointerdown", (e) => { bowHeld = true; bowBtn.classList.add("active"); try { bowBtn.setPointerCapture(e.pointerId); } catch (_) {} });
+  const endBow = () => { bowHeld = false; bowBtn.classList.remove("active"); };
+  bowBtn.addEventListener("pointerup", endBow); bowBtn.addEventListener("pointercancel", endBow);
+  bowBtn.addEventListener("click", (e) => { if (e.detail === 0) bowE = Math.min(1.4, bowE + 0.8); });
+
+  // ---------- bowing on the plate ----------
+  const bowPos = { ok: false, x: 0, y: 0, tx: 1, ty: 0 };
+  let drag = null;
+  function plateCoords(e) {
+    const r = canvas.getBoundingClientRect();
+    const cxp = (e.clientX - r.left) / r.width * W, cyp = (e.clientY - r.top) / r.height * W;
+    return { cxp, cyp, x: (cxp - M) / P, y: (cyp - M) / P };
+  }
+  function edgeInfo(x, y) { // distance to rim in plate units and the rim normal
+    if (shape === "square") {
+      const d = [x, 1 - x, y, 1 - y]; let k = 0; for (let i = 1; i < 4; i++) if (d[i] < d[k]) k = i;
+      const nx = k === 0 ? -1 : k === 1 ? 1 : 0, ny = k === 2 ? -1 : k === 3 ? 1 : 0;
+      return { d: d[k], nx, ny };
+    }
+    const X = x - 0.5, Y = y - 0.5, r = Math.hypot(X, Y) || 1e-6;
+    return { d: 0.5 - r, nx: X / r, ny: Y / r };
+  }
+  canvas.addEventListener("pointerdown", (e) => {
+    try { canvas.setPointerCapture(e.pointerId); } catch (_) {}
+    drag = plateCoords(e); bowAt(drag, 0);
+  });
+  canvas.addEventListener("pointermove", (e) => {
+    if (!drag) return;
+    const p = plateCoords(e);
+    bowAt(p, Math.hypot(p.x - drag.x, p.y - drag.y));
+    drag = p;
+  });
+  const endDrag = () => { drag = null; };
+  canvas.addEventListener("pointerup", endDrag); canvas.addEventListener("pointercancel", endDrag);
+  function bowAt(p, dist) {
+    const ei = edgeInfo(p.x, p.y);
+    if (ei.d < 0.11 && ei.d > -0.05) {
+      bowE = Math.min(1.4, bowE + Math.min(0.35, dist * 7) + 0.02);
+      // bow drawn across the rim, at the rim
+      const ex = p.cxp - ei.nx * ei.d * P, ey = p.cyp - ei.ny * ei.d * P;
+      bowPos.ok = true; bowPos.x = ex; bowPos.y = ey; bowPos.tx = ei.nx; bowPos.ty = ei.ny;
+      $("hint").textContent = "Bowing";
+    } else {
+      $("hint").textContent = "Move to the rim to bow";
+    }
+  }
+
+  // ---------- keyboard ----------
+  addEventListener("keydown", (e) => {
+    if (e.ctrlKey || e.metaKey || e.altKey) return;
+    const tag = e.target && e.target.tagName;
+    if (tag === "INPUT" || tag === "SELECT") return;
+    const k = e.key;
+    if (k === "ArrowUp" || k === "ArrowDown") { const d = k === "ArrowUp" ? 1 : -1; const v = Math.max(+nIn.min, Math.min(+nIn.max, n + d)); setMode(v, m); e.preventDefault(); }
+    else if (k === "ArrowLeft" || k === "ArrowRight") { const d = k === "ArrowRight" ? 1 : -1; const v = Math.max(+mIn.min, Math.min(+mIn.max, m + d)); setMode(n, v); e.preventDefault(); }
+    else if (k === "b" || k === "B") { keyBow = true; }
+    else if (k === "s" || k === "S") setSweep(!sweeping);
+    else if (k === "c" || k === "C") setShape(shape === "square" ? "circle" : "square");
+    else if ((k === "x" || k === "X") && shape === "square") { signIn.value = String(-sign); signIn.dispatchEvent(new Event("change")); }
+    else if (k === "r" || k === "R") $("scatter").click();
+  });
+  addEventListener("keyup", (e) => { if (e.key === "b" || e.key === "B") keyBow = false; });
+  addEventListener("blur", () => { keyBow = false; endBow(); });
+
+  // ---------- audio ----------
+  let ac = null, osc1, osc2, gain, lp;
+  const soundBtn = $("sound");
+  soundBtn.addEventListener("click", () => {
+    try {
+      if (!ac) {
+        ac = new (window.AudioContext || window.webkitAudioContext)();
+        osc1 = ac.createOscillator(); osc1.type = "triangle";
+        osc2 = ac.createOscillator(); osc2.type = "sine";
+        const g2 = ac.createGain(); g2.gain.value = 0.25;
+        lp = ac.createBiquadFilter(); lp.type = "lowpass"; lp.frequency.value = 3200;
+        gain = ac.createGain(); gain.gain.value = 0;
+        osc1.connect(lp); osc2.connect(g2); g2.connect(lp); lp.connect(gain); gain.connect(ac.destination);
+        osc1.frequency.value = freq; osc2.frequency.value = freq * 2;
+        osc1.start(); osc2.start();
+        soundBtn.setAttribute("aria-pressed", "true"); soundBtn.textContent = "Sound off";
+        return;
+      }
+      if (ac.state === "running") { ac.suspend(); soundBtn.setAttribute("aria-pressed", "false"); soundBtn.textContent = "Sound on"; }
+      else { ac.resume(); soundBtn.setAttribute("aria-pressed", "true"); soundBtn.textContent = "Sound off"; }
+    } catch (_) { soundBtn.disabled = true; soundBtn.textContent = "No audio"; }
+  });
+
+  // ---------- loop ----------
+  let last = performance.now(), shownF = -1;
+  function frame(now) {
+    const dt = Math.min(0.05, (now - last) / 1000); last = now;
+    if (bowHeld || keyBow) bowE = Math.min(1.4, bowE + 2.2 * dt);
+    if (bowHeld || keyBow) { bowPos.ok = false; }
+    bowE *= Math.exp(-dt / 0.7);
+
+    if (sweeping) {
+      if (!sw) startTransition();
+      sw.t += dt;
+      if (sw.phase === "trans") {
+        const t = Math.min(1, sw.t / TRANS), th = t * Math.PI / 2;
+        wA = Math.cos(th); wB = Math.sin(th);
+        freq = sw.f0 * Math.pow(sw.f1 / sw.f0, t);
+        if (t >= 1) { const to = sw.to; setMode(to[0], to[1], true); sw.phase = "dwell"; sw.t = 0; }
+      } else if (sw.t >= DWELL) startTransition();
+    }
+
+    const e = amp + bowE;
+    const sub = reduce ? 1 : 2;
+    for (let k = 0; k < sub; k++) step(0.016 * e, 0.0004 * Math.min(1, e), 0.0012 * Math.min(1, e));
+    draw();
+
+    if (Math.round(freq) !== shownF) { shownF = Math.round(freq); $("freq").textContent = shownF; }
+    if (ac && ac.state === "running") {
+      const t = ac.currentTime;
+      osc1.frequency.setTargetAtTime(freq, t, 0.03);
+      osc2.frequency.setTargetAtTime(freq * 2, t, 0.03);
+      gain.gain.setTargetAtTime(0.16 * Math.min(1, e), t, 0.05);
+    }
+    if (bowE < 0.03 && !drag) bowPos.ok = false;
+    if (!drag && bowE < 0.03 && $("hint").textContent !== "Drag along the rim to bow the plate") $("hint").textContent = "Drag along the rim to bow the plate";
+    requestAnimationFrame(frame);
+  }
+
+  // ---------- boot: a formed figure before the first paint ----------
+  configShape();
+  setMode(3, 5);
+  presim(phone ? 260 : 320);
+  resize();
+  draw();
+  if ("ResizeObserver" in window) new ResizeObserver(() => { resize(); draw(); }).observe(canvas);
+  else addEventListener("resize", () => { resize(); draw(); });
+  requestAnimationFrame(frame);
+})();
+</script>
+</body>
+</html>
