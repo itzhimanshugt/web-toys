@@ -1,0 +1,574 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>Ripple Tank</title>
+<meta name="description" content="A real-time ripple tank that solves the 2D wave equation so you can build slits, reflectors and lenses and compare interference fringes with the textbook prediction.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Big+Shoulders+Display:wght@600;800&family=Atkinson+Hyperlegible:wght@400;700&display=swap">
+<style>
+/* Layout: tank canvas is the hero on the left, a ruled instrument panel on the right; stacks under 900px. Single visual world: a dark lab bench. */
+:root{
+  --bench:#161d24;      /* blue-biased bench slate */
+  --panel:#1e2731;      /* panel face */
+  --rule:#34424f;       /* engraved rules */
+  --chalk:#e4e9e6;      /* label chalk, faintly green */
+  --dim:#93a1ad;        /* secondary text */
+  --brass:#d6a957;      /* brass fittings, predictions */
+  --sky:#86c7e6;        /* live measurements */
+  --font-display:"Big Shoulders Display","Arial Narrow","Helvetica Neue",sans-serif;
+  --font-ui:"Atkinson Hyperlegible",system-ui,-apple-system,"Segoe UI",sans-serif;
+  --font-mono: var(--font-ui);
+  color-scheme:dark;
+}
+*{box-sizing:border-box}
+html{-webkit-text-size-adjust:100%}
+body{margin:0;background:var(--bench);color:var(--chalk);font:15px/1.45 var(--font-ui);
+  padding-block:max(16px,env(safe-area-inset-top,0px)) max(24px,env(safe-area-inset-bottom,0px));
+  padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));}
+.wrap{max-width:1340px;margin:0 auto}
+header.top{display:flex;flex-wrap:wrap;align-items:baseline;gap:6px 22px;margin-bottom:14px}
+h1{font:800 clamp(24px, 4vw, 32px)/0.9 var(--font-display);letter-spacing:.02em;text-transform:uppercase;margin:0;text-wrap:balance}
+.sub{margin:0;color:var(--dim);max-width:62ch;min-width:0;text-wrap:balance}
+.sub code{font-family:var(--font-mono);font-size:.92em;color:var(--chalk)}
+.lab{display:grid;grid-template-columns:minmax(0,1fr) 330px;gap:22px;align-items:start}
+@media (max-width:900px){.lab{grid-template-columns:minmax(0,1fr)}}
+.tank{min-width:0}
+.frame{position:relative;padding:8px;background:#262f3a;border:1px solid #3d4b58;border-radius:6px;box-shadow:inset 0 1px 0 #4a5966,0 10px 30px #0008}
+canvas#tank{display:block;width:100%;aspect-ratio:8/5;touch-action:none;background:#0d1a23;border-radius:2px;cursor:crosshair}
+canvas#tank:focus-visible{outline:2px solid var(--brass);outline-offset:3px}
+.tools{display:flex;flex-wrap:wrap;gap:8px 14px;align-items:center;margin-top:12px}
+.seg{display:flex;flex-wrap:wrap;gap:4px;min-width:0}
+.lbl{font:600 12px/1 var(--font-ui);color:var(--dim)}
+button,select,input{font:inherit;color:inherit}
+button{background:var(--panel);border:1px solid var(--rule);border-radius:4px;padding:6px 11px;cursor:pointer;min-height:34px}
+button:hover{border-color:#566676}
+button[aria-pressed="true"]{background:var(--brass);color:#1a1408;border-color:var(--brass);font-weight:700}
+button:focus-visible,select:focus-visible,input:focus-visible{outline:2px solid var(--brass);outline-offset:2px}
+button kbd{font:400 11px var(--font-mono);opacity:.7;margin-left:4px}
+select{background:var(--panel);border:1px solid var(--rule);border-radius:4px;padding:6px 8px;min-height:34px;max-width:100%}
+.panel{background:var(--panel);border:1px solid var(--rule);border-radius:6px;padding:4px 16px 14px;min-width:0}
+.grp{padding:12px 0;border-bottom:1px solid var(--rule)}
+.grp:last-child{border-bottom:0}
+.grp h2{font:600 12px/1 var(--font-ui);color:var(--dim);margin:0 0 10px}
+.row{display:grid;grid-template-columns:86px minmax(0,1fr) 64px;align-items:center;gap:8px;margin:7px 0}
+.row label{font-size:13px;color:var(--chalk);min-width:0}
+.row output{font:400 12px var(--font-mono);font-variant-numeric:tabular-nums;text-align:right;color:var(--sky);white-space:nowrap}
+.row.two{grid-template-columns:86px minmax(0,1fr)}
+input[type=range]{width:100%;accent-color:var(--brass);min-height:28px;margin:0}
+.btns{display:flex;flex-wrap:wrap;gap:6px}
+.check{display:flex;align-items:center;gap:8px;font-size:13px;margin-top:6px}
+input[type=checkbox]{accent-color:var(--brass);width:16px;height:16px}
+dl.read{margin:0;display:grid;grid-template-columns:minmax(0,1fr) auto;gap:5px 10px;font-size:13px}
+dl.read dt{color:var(--dim);min-width:0}
+dl.read dd{margin:0;font:400 12.5px var(--font-mono);font-variant-numeric:tabular-nums;text-align:right;color:var(--chalk)}
+dl.read dd.pred{color:var(--brass)}
+dl.read dd.meas{color:var(--sky)}
+.hint{font-size:12.5px;color:var(--dim);margin:8px 0 0}
+.legend{display:flex;flex-wrap:wrap;gap:4px 14px;font-size:12px;color:var(--dim);margin-top:8px}
+.legend i{display:inline-block;width:14px;height:3px;vertical-align:middle;margin-right:5px}
+.notes{display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:14px 26px;margin-top:22px;border-top:1px solid var(--rule);padding-top:14px}
+.notes p{margin:0;font-size:13.5px;color:var(--dim);min-width:0}
+.notes b{color:var(--chalk);font-weight:700}
+.status{font:400 12px var(--font-mono);color:var(--dim);font-variant-numeric:tabular-nums;margin-left:auto;white-space:nowrap}
+@media (max-width:600px){.status{margin-left:0;white-space:normal}.row{grid-template-columns:76px minmax(0,1fr) 58px}}
+.sr{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}
+body { font-variant-numeric: tabular-nums; }
+</style>
+</head>
+<body>
+<div class="wrap">
+<header class="top">
+  <h1>Ripple Tank</h1>
+  <p class="sub">A 320 × 200 mm tank solving <code>∂²h/∂t² = v²∇²h</code> on a 1 mm grid, 500 steps per simulated second. Drag sources, draw barriers, paint shallow water.</p>
+</header>
+<div class="lab">
+  <section class="tank" aria-label="Wave tank">
+    <div class="frame"><canvas id="tank" tabindex="0" role="img" aria-label="Ripple tank simulation. Arrow keys move the selected source."></canvas></div>
+    <div class="tools">
+      <span class="lbl" id="toolLbl">Tool</span>
+      <div class="seg" role="group" aria-labelledby="toolLbl">
+        <button id="tool-move" data-tool="move" aria-pressed="true">Move<kbd>M</kbd></button>
+        <button id="tool-source" data-tool="source" aria-pressed="false">Add source<kbd>A</kbd></button>
+        <button id="tool-wall" data-tool="wall" aria-pressed="false">Wall<kbd>W</kbd></button>
+        <button id="tool-shallow" data-tool="shallow" aria-pressed="false">Shallow<kbd>H</kbd></button>
+        <button id="tool-erase" data-tool="erase" aria-pressed="false">Erase<kbd>E</kbd></button>
+      </div>
+      <span class="status" id="status" aria-live="off"></span>
+    </div>
+  </section>
+  <aside class="panel" aria-label="Controls">
+    <div class="grp">
+      <h2>Run</h2>
+      <div class="btns">
+        <button id="play" aria-pressed="false">Pause<kbd>Space</kbd></button>
+        <button id="stepBtn">Step 2 ms<kbd>.</kbd></button>
+        <button id="still">Still water<kbd>R</kbd></button>
+      </div>
+      <div class="row"><label for="speed">Speed</label><input id="speed" type="range" min="1" max="10" step="1" value="4"><output id="speedOut" for="speed"></output></div>
+      <div class="row"><label for="damping">Damping</label><input id="damping" type="range" min="0" max="20" step="1" value="0"><output id="dampOut" for="damping"></output></div>
+    </div>
+    <div class="grp">
+      <h2>Experiment</h2>
+      <div class="row two"><label for="preset">Preset</label>
+        <select id="preset">
+          <option value="double">1 · Young's double slit</option>
+          <option value="single">2 · Single-slit diffraction</option>
+          <option value="two">3 · Two-source interference</option>
+          <option value="mirror">4 · Parabolic reflector</option>
+          <option value="lens">5 · Shallow-water lens</option>
+          <option value="prism">6 · Shallow-water prism</option>
+          <option value="doppler">7 · Moving source, Doppler</option>
+        </select></div>
+      <div class="btns"><button id="reload">Reset preset</button><button id="clear">Clear tank<kbd>C</kbd></button></div>
+      <div class="row"><label for="brush">Brush</label><input id="brush" type="range" min="1" max="12" step="1" value="3"><output id="brushOut" for="brush"></output></div>
+    </div>
+    <div class="grp">
+      <h2>Selected source</h2>
+      <div class="row"><label for="freq">Frequency</label><input id="freq" type="range" min="8" max="30" step="0.5" value="20"><output id="freqOut" for="freq"></output></div>
+      <div class="row"><label for="phase">Phase</label><input id="phase" type="range" min="0" max="345" step="15" value="0"><output id="phaseOut" for="phase"></output></div>
+      <div class="row"><label for="mach">Drift</label><input id="mach" type="range" min="0" max="1.6" step="0.05" value="0"><output id="machOut" for="mach"></output></div>
+      <label class="check"><input id="link" type="checkbox" checked> One vibrator: frequency applies to all sources</label>
+      <div class="btns" style="margin-top:8px"><button id="removeSrc">Remove source<kbd>Del</kbd></button></div>
+      <p class="hint">Wheel over a source changes its frequency; Shift + wheel changes phase. Drift moves a point source to the right at that fraction of wave speed.</p>
+    </div>
+    <div class="grp">
+      <h2>View</h2>
+      <div class="row two"><label for="view">Show</label>
+        <select id="view"><option value="water">Water surface (lit)</option><option value="intensity">Intensity ⟨h²⟩</option></select></div>
+      <div class="row two"><label for="palette">Palette</label>
+        <select id="palette"><option value="tank">Tank blue</option><option value="cividis">Cividis</option><option value="viridis">Viridis</option><option value="grey">Grey</option></select></div>
+    </div>
+    <div class="grp">
+      <h2>Readouts</h2>
+      <dl class="read" id="read"></dl>
+      <div class="legend" id="legend"></div>
+    </div>
+  </aside>
+</div>
+<section class="notes" aria-label="Bench notes">
+  <p><b>Stable step.</b> The explicit five-point scheme is stable when the Courant number v·Δt/Δx stays at or below 1/√2 ≈ 0.707. This tank runs at 0.50 in deep water and 0.30 over the shallows.</p>
+  <p><b>Why shallows bend waves.</b> Long water waves travel at about √(g·h), so a thinner layer is slower. A glass plate under a real ripple tank acts as a lens the same way glass slows light. Here, 150 mm/s against 250 mm/s gives a refractive index of 5/3.</p>
+  <p><b>Bow waves.</b> A source faster than its waves trails a cone with half-angle μ where sin μ = 1/M. Set drift above 1.0 in preset 7 to see the predicted cone drawn over the simulated one.</p>
+  <p><b>Model limits.</b> Real water ripples are dispersive: below about 17 mm wavelength surface tension takes over from gravity. This tank uses the ideal non-dispersive equation so v stays fixed and λ = v / f holds exactly, up to small grid dispersion.</p>
+</section>
+</div>
+<script>
+(function(){
+"use strict";
+// ---------- grid and physics constants ----------
+const W=320,H=200,P=24,NX=W+2*P,NY=H+2*P,N=NX*NY;
+const V0=250, C0=0.5, DT=C0*1/V0;          // 1 mm cells, v = 250 mm/s, Courant 0.5 -> dt = 2 ms
+const SHALLOW=0.6;                          // shallow speed factor: 150 mm/s
+const ALPHA=1/160;                          // intensity running-average weight per step
+let u=new Float32Array(N), up=new Float32Array(N);
+const I=new Float32Array(N), wall=new Uint8Array(N), shal=new Uint8Array(N);
+const A=new Float32Array(N), B=new Float32Array(N), K=new Float32Array(N);
+let damp=0, simT=0, steps=0;
+let sources=[], sel=null, preset=null, geo=null;
+
+function rebuild(){
+  for(let y=0;y<NY;y++)for(let x=0;x<NX;x++){
+    const i=y*NX+x;
+    if(x===0||y===0||x===NX-1||y===NY-1||wall[i]){A[i]=B[i]=K[i]=0;continue}
+    const d=Math.max(P-x,x-(P+W-1),P-y,y-(P+H-1),0)/P;
+    const s=0.35*d*d+damp, c=shal[i]?SHALLOW:1, k=C0*C0*c*c;
+    A[i]=2/(1+s);B[i]=(1-s)/(1+s);K[i]=k/(1+s);
+  }
+}
+function still(){u.fill(0);up.fill(0);I.fill(0);}
+
+function splat(x,y,v){
+  const x0=Math.round(x),y0=Math.round(y);
+  for(let j=-2;j<=2;j++)for(let k=-2;k<=2;k++){
+    const xx=x0+k,yy=y0+j;if(xx<1||yy<1||xx>=NX-1||yy>=NY-1)continue;
+    const i=yy*NX+xx;if(!A[i])continue;
+    const dx=xx-x,dy=yy-y;u[i]+=v*Math.exp(-(dx*dx+dy*dy));
+  }
+}
+function step(){
+  for(let y=1;y<NY-1;y++){
+    let i=y*NX+1;
+    for(let x=1;x<NX-1;x++,i++){
+      const c=u[i];
+      up[i]=A[i]*c-B[i]*up[i]+K[i]*(u[i-1]+u[i+1]+u[i-NX]+u[i+NX]-4*c);
+    }
+  }
+  const t=u;u=up;up=t;
+  for(const s of sources){
+    s.ph+=2*Math.PI*s.f*DT;
+    const v=Math.sin(s.ph+s.phase*Math.PI/180);
+    if(s.type==="line"){
+      const x=Math.round(s.x);
+      for(let y=1;y<NY-1;y++){const i=y*NX+x;if(A[i])u[i]+=0.5*v;}
+    }else{
+      if(s.mach){s.x+=s.mach*C0;if(s.x>P+W+6){s.x=P+6;}}
+      splat(s.x,s.y,0.6*v);
+    }
+  }
+  for(let i=0;i<N;i++){const c=u[i];I[i]+=ALPHA*(c*c-I[i]);}
+  simT+=DT;steps++;
+}
+
+// ---------- geometry helpers (interior coords: 0..W, 0..H in mm) ----------
+const G=(ix,iy)=>(Math.round(iy)+P)*NX+Math.round(ix)+P;
+function wallCol(ix,th,gaps){ // full-height barrier, gaps: [[centre, width]]
+  for(let y=0;y<NY;y++){
+    const iy=y-P;let open=false;
+    for(const g of gaps)if(Math.abs(iy+0.5-g[0])<g[1]/2)open=true;
+    if(open)continue;
+    for(let k=0;k<th;k++)wall[y*NX+ix+P+k]=1;
+  }
+}
+function src(o){return Object.assign({type:"point",x:0,y:0,f:20,phase:0,mach:0,ph:0},o);}
+function lineSrc(ix,f){return src({type:"line",x:ix+P,y:P+H/2,f:f});}
+
+const PRESETS={
+  double(){wallCol(90,3,[[100-30,6],[100+30,6]]);sources=[lineSrc(16,20)];
+    geo={kind:"double",d:60,sx:91.5,cy:100,screen:300};},
+  single(){wallCol(90,3,[[100,36]]);sources=[lineSrc(16,20)];
+    geo={kind:"single",a:36,sx:91.5,cy:100,screen:300};},
+  two(){sources=[src({x:P+110,y:P+75,f:20}),src({x:P+110,y:P+125,f:20})];
+    geo={kind:"two",d:50,sx:110,cy:100,screen:300};},
+  mirror(){const xv=292,F=50,yc=100;
+    for(let iy=-P;iy<H+P;iy++){const dy=iy-yc;if(Math.abs(dy)>92)continue;
+      const xs=xv-dy*dy/(4*F);for(let k=0;k<3;k++)wall[G(Math.round(xs)+k,iy)]=1;}
+    sources=[lineSrc(16,20)];geo={kind:"mirror",fx:xv-F,fy:yc,F:F};},
+  lens(){const R=120,t=50,cx=150,cy=100,c1=cx+R-t/2,c2=cx-R+t/2;
+    for(let iy=0;iy<H;iy++)for(let ix=0;ix<W;ix++){
+      const a=(ix-c1)**2+(iy-cy)**2,b=(ix-c2)**2+(iy-cy)**2;if(a<R*R&&b<R*R)shal[G(ix,iy)]=1;}
+    sources=[lineSrc(16,20)];geo={kind:"lens",fx:cx+R/(2*(V0/(V0*SHALLOW)-1)),fy:cy,f:R/(2*(V0/(V0*SHALLOW)-1))};},
+  prism(){const ax=140,ay=25,bx=80,by=175,cx2=200;
+    for(let iy=ay;iy<=by;iy++){const t=(iy-ay)/(by-ay);const x0=ax+(bx-ax)*t,x1=ax+(cx2-ax)*t;
+      for(let ix=Math.ceil(x0);ix<=x1;ix++)shal[G(ix,iy)]=1;}
+    sources=[lineSrc(16,20)];geo={kind:"prism"};},
+  doppler(){sources=[src({x:P+40,y:P+100,f:15,mach:0.6})];geo={kind:"doppler"};}
+};
+function load(name){
+  wall.fill(0);shal.fill(0);preset=name;PRESETS[name]();sel=sources[0]||null;
+  rebuild();still();simT=0;steps=0;syncSource();
+}
+
+// ---------- predictions ----------
+function lambda(s){return V0/(s?s.f:20);}
+function fringeMarks(){ // returns {small:[y], exact:[y], label}
+  if(!geo||!sources.length)return null;
+  const s=sources[0],lam=lambda(s);
+  if(geo.kind==="double"||geo.kind==="two"){
+    const d=geo.d,L=geo.screen-geo.sx,small=[],exact=[];
+    for(let m=-6;m<=6;m++){
+      const ys=m*lam*L/d;if(Math.abs(ys)<H/2)small.push(geo.cy+ys);
+      if(Math.abs(m*lam)<d){ // path difference r1 - r2 = m*lambda, solved by bisection
+        let lo=0,hi=2000,tg=Math.abs(m)*lam;
+        const pd=y=>Math.hypot(L,y+d/2)-Math.hypot(L,y-d/2);
+        for(let k=0;k<50;k++){const mid=(lo+hi)/2;if(pd(mid)<tg)lo=mid;else hi=mid;}
+        const ye=Math.sign(m)*lo;if(Math.abs(ye)<H/2)exact.push(geo.cy+ye);
+      }
+    }
+    return {small,exact,L,spacing:lam*L/d,what:"maxima"};
+  }
+  if(geo.kind==="single"){
+    const a=geo.a,L=geo.screen-geo.sx,small=[],exact=[];
+    for(let m=-4;m<=4;m++){if(!m)continue;
+      const ys=m*lam*L/a;if(Math.abs(ys)<H/2)small.push(geo.cy+ys);
+      if(Math.abs(m*lam)<a){const ye=L*Math.tan(Math.asin(m*lam/a));if(Math.abs(ye)<H/2)exact.push(geo.cy+ye);}
+    }
+    return {small,exact,L,spacing:lam*L/a,what:"minima"};
+  }
+  return null;
+}
+const prof=new Float32Array(H);
+function profile(){
+  if(!geo||geo.screen==null)return 0;
+  let mx=1e-12;
+  for(let iy=0;iy<H;iy++){const v=I[G(geo.screen,iy)];prof[iy]=v;if(v>mx)mx=v;}
+  return mx;
+}
+function measured(mx,minima){ // mean gap between neighbouring peaks (or troughs) of the screen profile
+  if(mx<1e-9)return NaN;let last=-1,sum=0,n=0;
+  for(let iy=3;iy<H-3;iy++){
+    const v=prof[iy];let ok;
+    if(minima)ok=v<prof[iy-1]&&v<=prof[iy+1]&&v<prof[iy-3]&&v<=prof[iy+3]&&v<0.5*mx;
+    else ok=v>prof[iy-1]&&v>=prof[iy+1]&&v>prof[iy-3]&&v>=prof[iy+3]&&v>0.2*mx;
+    if(ok){if(last>=0&&iy-last>4){sum+=iy-last;n++;}last=iy;}
+  }
+  return n?sum/n:NaN;
+}
+
+// ---------- palettes ----------
+function ramp(stops){
+  const o=new Uint8Array(768);
+  for(let i=0;i<256;i++){const t=i/255*(stops.length-1),k=Math.min(stops.length-2,Math.floor(t)),f=t-k;
+    const a=stops[k],b=stops[k+1];
+    for(let c=0;c<3;c++){const ca=parseInt(a.substr(1+2*c,2),16),cb=parseInt(b.substr(1+2*c,2),16);o[i*3+c]=Math.round(ca+(cb-ca)*f);}}
+  return o;
+}
+const PAL={
+  tank:ramp(["#06121f","#0d3352","#1f6a8c","#5fa8bf","#bfe4ea","#f4fbfb"]),
+  cividis:ramp(["#00204d","#31446b","#666970","#958f78","#cbba69","#ffea46"]),
+  viridis:ramp(["#440154","#3b528b","#21918c","#5ec962","#fde725"]),
+  grey:ramp(["#0b0c0d","#f2f2f2"])
+};
+let pal=PAL.tank, view="water";
+
+// ---------- rendering ----------
+const cv=document.getElementById("tank"),ctx=cv.getContext("2d");
+const off=document.createElement("canvas");off.width=W;off.height=H;
+const octx=off.getContext("2d"),img=octx.createImageData(W,H),px=img.data;
+const grain=new Uint8Array(W*H);for(let i=0;i<grain.length;i++)grain[i]=(Math.sin(i*12.9898)*43758.5453%1+1)%1*18|0;
+const samp=new Float32Array(Math.ceil(W/3)*Math.ceil(H/3));
+let gU=1,gI=1;
+const Lx=-0.42,Ly=-0.55,Lz=0.72,Ll=Math.hypot(Lx,Ly,Lz),lx=Lx/Ll,ly=Ly/Ll,lz=Lz/Ll;
+const hx=lx,hy=ly,hz=lz+1,hl=Math.hypot(hx,hy,hz),Hx=hx/hl,Hy=hy/hl,Hz=hz/hl;
+function pct(arr,q){let n=0;for(let iy=1;iy<H;iy+=3)for(let ix=1;ix<W;ix+=3)samp[n++]=arr(G(ix,iy));
+  const s=samp.subarray(0,n);s.sort();return s[Math.min(n-1,Math.floor(n*q))];}
+function paint(){
+  if(view==="water"){const p=pct(i=>Math.abs(u[i]),0.9)||1e-6;gU+=(1/Math.max(p,1e-4)-gU)*0.25;}
+  else{const p=pct(i=>I[i],0.985)||1e-9;gI+=(1/Math.max(p,1e-8)-gI)*0.25;}
+  let o=0;
+  for(let iy=0;iy<H;iy++){
+    let i=(iy+P)*NX+P;
+    for(let ix=0;ix<W;ix++,i++,o+=4){
+      let r,g,b;
+      if(wall[i]){const n=grain[iy*W+ix];r=96+n;g=100+n;b=104+n;}
+      else{
+        if(view==="water"){
+          const h0=u[i]*gU,h=h0/(1+0.35*Math.abs(h0)),sc2=0.9*gU/(1+0.35*Math.abs(h0)),sx=(u[i+1]-u[i-1])*sc2,sy=(u[i+NX]-u[i-NX])*sc2;
+          const inv=1/Math.sqrt(sx*sx+sy*sy+1),nx=-sx*inv,ny=-sy*inv,nz=inv;
+          const dif=Math.max(0,nx*lx+ny*ly+nz*lz);let sp=Math.max(0,nx*Hx+ny*Hy+nz*Hz);
+          sp*=sp;sp*=sp;sp*=sp;sp*=sp;sp*=sp;
+          let k=128+h*85|0;k=k<0?0:k>255?255:k;k*=3;
+          const sh=0.25+0.85*dif,spec=sp*150;
+          r=pal[k]*sh+spec;g=pal[k+1]*sh+spec;b=pal[k+2]*sh+spec;
+        }else{
+          let v=Math.sqrt(I[i]*gI);v=v>1?1:v;const k=(v*255|0)*3;
+          r=pal[k];g=pal[k+1];b=pal[k+2];
+        }
+        if(shal[i]){r=r*0.7+66;g=g*0.7+58;b=b*0.7+34;}
+      }
+      px[o]=r;px[o+1]=g;px[o+2]=b;px[o+3]=255;
+    }
+  }
+  octx.putImageData(img,0,0);
+  const cw=cv.width,ch=cv.height,sc=cw/W;
+  ctx.imageSmoothingEnabled=true;ctx.drawImage(off,0,0,cw,ch);
+  overlay(sc);
+}
+const dpr=()=>Math.min(window.devicePixelRatio||1,2);
+function fx(ix){return ix*cv.width/W;}
+function overlay(sc){
+  const d=dpr(),fs=11*d;
+  ctx.save();ctx.lineCap="round";
+  // shallow outline
+  // screen line, profile and predicted ticks
+  const fm=fringeMarks();
+  if(geo&&geo.screen!=null){
+    const X=fx(geo.screen+0.5);
+    ctx.strokeStyle="rgba(228,233,230,.55)";ctx.lineWidth=1*d;ctx.setLineDash([4*d,4*d]);
+    ctx.beginPath();ctx.moveTo(X,0);ctx.lineTo(X,cv.height);ctx.stroke();ctx.setLineDash([]);
+    const mx=profile();
+    if(mx>1e-9){ctx.strokeStyle="#86c7e6";ctx.lineWidth=1.6*d;ctx.beginPath();
+      for(let iy=0;iy<H;iy++){const x=X-4*d-(prof[iy]/mx)*34*d,y=(iy+0.5)*sc;iy?ctx.lineTo(x,y):ctx.moveTo(x,y);}ctx.stroke();}
+    if(fm){
+      ctx.strokeStyle="#d6a957";ctx.lineWidth=2.2*d;
+      for(const y of fm.small){const Y=(y+0.5)*sc;ctx.beginPath();ctx.moveTo(X+3*d,Y);ctx.lineTo(X+15*d,Y);ctx.stroke();}
+      ctx.fillStyle="#e4e9e6";
+      for(const y of fm.exact){const Y=(y+0.5)*sc;ctx.beginPath();ctx.arc(X+20*d,Y,2.4*d,0,7);ctx.fill();}
+    }
+  }
+  if(geo&&(geo.kind==="mirror"||geo.kind==="lens")){
+    const X=fx(geo.fx+0.5),Y=(geo.fy+0.5)*sc;
+    ctx.strokeStyle="#d6a957";ctx.lineWidth=1.5*d;ctx.beginPath();
+    ctx.moveTo(X-7*d,Y);ctx.lineTo(X+7*d,Y);ctx.moveTo(X,Y-7*d);ctx.lineTo(X,Y+7*d);ctx.stroke();
+    ctx.fillStyle="#d6a957";ctx.font=`600 ${fs}px "JetBrains Mono",monospace`;
+    ctx.fillText(geo.kind==="mirror"?"F (f = "+geo.F+" mm)":"F thin lens ≈ "+Math.round(geo.f)+" mm",X+9*d,Y-9*d);
+  }
+  // sources
+  for(const s of sources){
+    const X=fx(s.x-P+0.5),Y=(s.y-P+0.5)*sc,on=s===sel;
+    if(s.type==="line"){
+      ctx.strokeStyle=on?"#d6a957":"rgba(214,169,87,.55)";ctx.lineWidth=(on?2.4:1.6)*d;
+      ctx.beginPath();ctx.moveTo(X,0);ctx.lineTo(X,cv.height);ctx.stroke();
+      ctx.fillStyle="#d6a957";ctx.fillRect(X-4*d,Y-12*d,8*d,24*d);
+    }else{
+      if(s.mach>1){ // Mach cone: half-angle asin(1/M) behind the source
+        const mu=Math.asin(1/s.mach),len=W*sc;
+        ctx.strokeStyle="rgba(214,169,87,.85)";ctx.lineWidth=1.4*d;ctx.setLineDash([6*d,5*d]);ctx.beginPath();
+        ctx.moveTo(X-len*Math.cos(mu),Y-len*Math.sin(mu));ctx.lineTo(X,Y);ctx.lineTo(X-len*Math.cos(mu),Y+len*Math.sin(mu));ctx.stroke();ctx.setLineDash([]);
+      }
+      ctx.beginPath();ctx.arc(X,Y,(on?7:5.5)*d,0,7);
+      ctx.fillStyle="rgba(20,26,32,.55)";ctx.fill();
+      ctx.strokeStyle="#d6a957";ctx.lineWidth=(on?2.6:1.6)*d;ctx.stroke();
+      ctx.beginPath();ctx.arc(X,Y,1.8*d,0,7);ctx.fillStyle="#d6a957";ctx.fill();
+    }
+  }
+  // scale bar 50 mm
+  const bx=12*d,by=cv.height-14*d,bl=50*sc;
+  ctx.fillStyle="rgba(10,16,22,.6)";ctx.fillRect(bx-6*d,by-18*d,bl+64*d,26*d);
+  ctx.strokeStyle="#e4e9e6";ctx.lineWidth=2*d;ctx.beginPath();
+  ctx.moveTo(bx,by-5*d);ctx.lineTo(bx,by);ctx.lineTo(bx+bl,by);ctx.lineTo(bx+bl,by-5*d);ctx.moveTo(bx+bl/2,by);ctx.lineTo(bx+bl/2,by-3*d);ctx.stroke();
+  ctx.fillStyle="#e4e9e6";ctx.font=`400 ${fs}px "JetBrains Mono",monospace`;ctx.fillText("50 mm",bx+bl+8*d,by);
+  // wavelength gauge for selected source
+  if(sel){const lam=lambda(sel)*sc,gx=bx+bl+80*d,gy=by;
+    ctx.fillStyle="rgba(10,16,22,.6)";ctx.fillRect(gx-20*d,gy-18*d,lam+28*d,26*d);
+    ctx.strokeStyle="#86c7e6";ctx.beginPath();ctx.moveTo(gx,gy-5*d);ctx.lineTo(gx,gy);ctx.lineTo(gx+lam,gy);ctx.lineTo(gx+lam,gy-5*d);ctx.stroke();
+    ctx.fillStyle="#86c7e6";ctx.textAlign="right";ctx.fillText("λ",gx-8*d,gy);ctx.textAlign="left";}
+  ctx.restore();
+}
+
+// ---------- canvas sizing ----------
+function resize(){
+  const r=cv.getBoundingClientRect(),d=dpr();
+  const w=Math.max(160,Math.min(1800,Math.round(r.width*d)));
+  cv.width=w;cv.height=Math.round(w*H/W);
+}
+new ResizeObserver(()=>{resize();paint();}).observe(cv);
+
+// ---------- UI ----------
+const $=id=>document.getElementById(id);
+const reduce=matchMedia("(prefers-reduced-motion: reduce)").matches;
+const small=matchMedia("(max-width: 600px)").matches;
+let running=!reduce,tool="move";
+if(small)$("speed").value=3;
+function setRun(v){running=v;$("play").setAttribute("aria-pressed",String(!v));$("play").firstChild.textContent=v?"Pause":"Play";}
+function setTool(t){tool=t;document.querySelectorAll("[data-tool]").forEach(b=>b.setAttribute("aria-pressed",String(b.dataset.tool===t)));}
+function fmt(v,n){return Number.isFinite(v)?v.toFixed(n):"–";}
+function syncSource(){
+  const s=sel;["freq","phase","mach","removeSrc"].forEach(id=>$(id).disabled=!s);
+  $("mach").disabled=!s||s.type==="line";
+  if(s){$("freq").value=s.f;$("phase").value=s.phase;$("mach").value=s.mach;}
+  $("freqOut").textContent=s?s.f.toFixed(1)+" Hz":"–";
+  $("phaseOut").textContent=s?s.phase+"°":"–";
+  $("machOut").textContent=s&&s.type!=="line"?"M "+s.mach.toFixed(2):"–";
+}
+function setFreq(s,f){f=Math.max(8,Math.min(30,Math.round(f*2)/2));
+  if($("link").checked)sources.forEach(o=>o.f=f);else s.f=f;syncSource();}
+function readouts(){
+  const s=sel||sources[0],rows=[];
+  if(s){const lam=lambda(s);
+    rows.push(["Frequency f",s.f.toFixed(1)+" Hz",""],["Wave speed v","250 mm/s",""],
+      ["λ = v / f",lam.toFixed(1)+" mm · "+lam.toFixed(1)+" cells","pred"],
+      ["λ over shallows",(lam*SHALLOW).toFixed(1)+" mm",""]);}
+  const fm=fringeMarks();
+  if(fm){const g=geo;
+    if(g.kind==="single")rows.push(["Slit width a",g.a+" mm",""]);else rows.push(["Separation d",g.d+" mm",""]);
+    rows.push(["Screen distance L",fm.L.toFixed(0)+" mm",""],
+      [g.kind==="single"?"Minima gap λL/a":"Fringe gap λL/d",fm.spacing.toFixed(1)+" mm","pred"],
+      ["Measured on screen",fmt(measured(profile(),fm.what==="minima"),1)+" mm","meas"]);}
+  if(s&&s.type==="point"&&s.mach>0){const lam=lambda(s),M=s.mach;
+    rows.push(["Drift speed",(M*V0).toFixed(0)+" mm/s",""],["λ ahead",M<1?(lam*(1-M)).toFixed(1)+" mm":"no waves ahead","pred"],["λ behind",(lam*(1+M)).toFixed(1)+" mm","pred"]);
+    if(M>1)rows.push(["Mach half-angle",(Math.asin(1/M)*180/Math.PI).toFixed(1)+"°","pred"]);}
+  rows.push(["Courant number","0.50 (limit 0.707)",""],["Sim time",simT.toFixed(2)+" s",""]);
+  $("read").innerHTML=rows.map(r=>`<dt>${r[0]}</dt><dd class="${r[2]}">${r[1]}</dd>`).join("");
+  $("legend").innerHTML=fm?`<span><i style="background:#d6a957"></i>λL/${geo.kind==="single"?"a":"d"} ${fm.what}</span><span><i style="background:#e4e9e6;height:5px;width:5px;border-radius:50%"></i>exact path-difference ${fm.what}</span><span><i style="background:#86c7e6"></i>simulated ⟨h²⟩</span>`:"";
+}
+function labels(){
+  const sp=+$("speed").value;$("speedOut").textContent="×"+(sp*DT*60).toFixed(2);
+  const dv=+$("damping").value;damp=dv*0.0002;$("dampOut").textContent=dv?"τ "+(DT/damp).toFixed(1)+" s":"off";
+  $("brushOut").textContent=(+$("brush").value*2-1)+" mm";
+}
+
+document.querySelectorAll("[data-tool]").forEach(b=>b.addEventListener("click",()=>setTool(b.dataset.tool)));
+$("play").addEventListener("click",()=>setRun(!running));
+$("stepBtn").addEventListener("click",()=>{setRun(false);step();paint();readouts();});
+$("still").addEventListener("click",()=>{still();sources.forEach(s=>s.ph=0);paint();});
+$("speed").addEventListener("input",labels);
+$("damping").addEventListener("input",()=>{labels();rebuild();});
+$("brush").addEventListener("input",labels);
+$("preset").addEventListener("change",e=>{load(e.target.value);paint();readouts();});
+$("reload").addEventListener("click",()=>{load($("preset").value);paint();readouts();});
+$("clear").addEventListener("click",()=>{wall.fill(0);shal.fill(0);sources=[];sel=null;geo=null;rebuild();still();syncSource();paint();readouts();});
+$("freq").addEventListener("input",e=>{if(sel)setFreq(sel,+e.target.value);});
+$("phase").addEventListener("input",e=>{if(sel){sel.phase=+e.target.value;syncSource();}});
+$("mach").addEventListener("input",e=>{if(sel&&sel.type==="point"){sel.mach=+e.target.value;syncSource();}});
+$("removeSrc").addEventListener("click",removeSel);
+$("view").addEventListener("change",e=>{view=e.target.value;paint();});
+$("palette").addEventListener("change",e=>{pal=PAL[e.target.value];paint();});
+function removeSel(){if(!sel)return;sources=sources.filter(s=>s!==sel);sel=sources[0]||null;syncSource();}
+
+// ---------- pointer ----------
+function toGrid(e){const r=cv.getBoundingClientRect();return{x:P+(e.clientX-r.left)/r.width*W-0.5,y:P+(e.clientY-r.top)/r.height*H-0.5,ppm:r.width/W};}
+function hit(g){let best=null,bd=1e9;
+  for(const s of sources){const dd=s.type==="line"?Math.abs(g.x-s.x)*g.ppm:Math.hypot(g.x-s.x,g.y-s.y)*g.ppm;
+    if(dd<16&&dd<bd){bd=dd;best=s;}}return best;}
+function brush(gx,gy){
+  const r=+$("brush").value-0.5;
+  for(let y=Math.floor(gy-r);y<=gy+r;y++)for(let x=Math.floor(gx-r);x<=gx+r;x++){
+    if(x<1||y<1||x>=NX-1||y>=NY-1||(x-gx)**2+(y-gy)**2>r*r)continue;
+    const i=y*NX+x;
+    if(tool==="wall"){wall[i]=1;u[i]=up[i]=0;}else if(tool==="shallow"){shal[i]=1;wall[i]=0;}else{wall[i]=0;shal[i]=0;}
+  }
+}
+let drag=null,lastP=null;
+cv.addEventListener("pointerdown",e=>{
+  cv.focus({preventScroll:true});const g=toGrid(e);
+  try{cv.setPointerCapture(e.pointerId);}catch(_){}
+  if(tool==="move"||tool==="source"){
+    let s=hit(g);
+    if(!s&&tool==="source"){
+      if(sources.filter(o=>o.type==="point").length>=8)sources.splice(sources.findIndex(o=>o.type==="point"),1);
+      s=src({x:g.x,y:g.y,f:sel?sel.f:20});sources.push(s);}
+    sel=s;syncSource();if(s)drag={s,dx:s.x-g.x,dy:s.y-g.y};
+  }else{brush(g.x,g.y);rebuild();lastP=g;}
+  if(!running)paint();readouts();
+});
+cv.addEventListener("pointermove",e=>{
+  const g=toGrid(e);
+  if(drag){const s=drag.s;s.x=Math.max(P,Math.min(P+W-1,g.x+drag.dx));if(s.type==="point")s.y=Math.max(P,Math.min(P+H-1,g.y+drag.dy));if(!running)paint();return;}
+  if(lastP){const n=Math.ceil(Math.hypot(g.x-lastP.x,g.y-lastP.y));
+    for(let k=1;k<=n;k++)brush(lastP.x+(g.x-lastP.x)*k/n,lastP.y+(g.y-lastP.y)*k/n);
+    lastP=g;rebuild();if(!running)paint();return;}
+  cv.style.cursor=(tool==="move"||tool==="source")&&hit(g)?"grab":"crosshair";
+});
+const endP=()=>{if(lastP)I.fill(0);drag=null;lastP=null;};
+cv.addEventListener("pointerup",endP);cv.addEventListener("pointercancel",endP);
+cv.addEventListener("wheel",e=>{
+  const s=hit(toGrid(e));if(!s)return;e.preventDefault();sel=s;
+  const dir=e.deltaY<0?1:-1;
+  if(e.shiftKey){s.phase=(s.phase+dir*15+360)%360;syncSource();}else setFreq(s,s.f+dir*0.5);
+  if(!running)paint();readouts();
+},{passive:false});
+
+// ---------- keyboard ----------
+const keyTools={m:"move",a:"source",w:"wall",h:"shallow",e:"erase"};
+document.addEventListener("keydown",e=>{
+  if(e.ctrlKey||e.metaKey||e.altKey)return;
+  const t=e.target,tag=t.tagName;
+  const typing=tag==="SELECT"||(tag==="INPUT"&&t.type!=="checkbox");
+  if(e.key===" "&&tag!=="BUTTON"&&!typing){e.preventDefault();setRun(!running);return;}
+  if(typing)return;
+  const k=e.key.toLowerCase();
+  if(keyTools[k]){setTool(keyTools[k]);return;}
+  if(k==="."){setRun(false);step();paint();readouts();return;}
+  if(k==="r"){$("still").click();return;}
+  if(k==="c"){$("clear").click();return;}
+  if(k==="v"){$("view").value=view==="water"?"intensity":"water";$("view").dispatchEvent(new Event("change"));return;}
+  if(k>="1"&&k<="7"){const sel2=$("preset");sel2.selectedIndex=+k-1;sel2.dispatchEvent(new Event("change"));return;}
+  if(sel&&(k==="["||k==="]")){setFreq(sel,sel.f+(k==="]"?0.5:-0.5));readouts();return;}
+  if(sel&&(e.key==="Delete"||e.key==="Backspace")&&t===cv){e.preventDefault();removeSel();readouts();if(!running)paint();return;}
+  if(sel&&t===cv&&e.key.startsWith("Arrow")){
+    e.preventDefault();const st=e.shiftKey?10:1;
+    if(e.key==="ArrowLeft")sel.x-=st;if(e.key==="ArrowRight")sel.x+=st;
+    if(sel.type==="point"){if(e.key==="ArrowUp")sel.y-=st;if(e.key==="ArrowDown")sel.y+=st;}
+    sel.x=Math.max(P,Math.min(P+W-1,sel.x));sel.y=Math.max(P,Math.min(P+H-1,sel.y));if(!running)paint();
+  }
+});
+
+// ---------- loop ----------
+let frames=0;
+function frame(){
+  if(running){const n=+$("speed").value;for(let k=0;k<n;k++)step();}
+  paint();if(++frames%6===0||!running)readouts();
+  $("status").textContent=(running?"running":"paused")+" · "+steps+" steps";
+  requestAnimationFrame(frame);
+}
+labels();load("double");
+for(let k=0;k<1100;k++)step();   // pre-run so the first frame already shows fringes
+setRun(running);resize();paint();readouts();
+requestAnimationFrame(frame);
+})();
+</script>
+</body>
+</html>
